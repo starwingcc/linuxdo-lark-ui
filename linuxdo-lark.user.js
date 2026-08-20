@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      1.3.0
-// @description  将 Linux DO 的主页与话题页换成飞书云文档风格，仅改变外观，保留站点原有内容与交互。
+// @version      1.4.0
+// @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
 // @icon         https://linux.do/favicon.ico
@@ -17,17 +17,40 @@
   const FAVICON_ID = "lark-favicon";
   const HOME_CLASS = "lark-doc-home";
   const TOPIC_CLASS = "lark-doc-topic";
+  const DARK_CLASS = "lark-dark";
   let faviconObserver;
 
   const CSS = String.raw`
-    :root {
+    html.lark-doc-theme {
       color-scheme: light !important;
       --lark-blue: #3370ff;
-      --lark-text: #1f2329;
-      --lark-line: #dee0e3;
-      --lark-line-soft: #eff0f1;
+      --lark-blue-strong: #245bdb;
+      --lark-blue-soft: #82a7fc;
+      --lark-red: #f54a45;
+      --lark-bg: #ffffff;
       --lark-fill: #f5f6f7;
+      --lark-fill-2: #f7f8fa;
       --lark-fill-hover: #eff0f1;
+      --lark-hover: #e9eaec;
+      --lark-row-hover: #f2f3f5;
+      --lark-line: #dee0e3;
+      --lark-line-2: #e6e8eb;
+      --lark-line-soft: #eff0f1;
+      --lark-line-strong: #c9cdd4;
+      --lark-text: #1f2329;
+      --lark-text-2: #646a73;
+      --lark-text-3: #8f959e;
+      --lark-text-4: #4e5969;
+      --lark-text-5: #373c43;
+      --lark-text-6: #2b2f36;
+      --lark-active-bg: #dfe7f9;
+      --lark-highlight: #e8f0ff;
+      --lark-timeline: #dbe8ff;
+      --lark-scrollbar: #bbbfc4;
+      --lark-focus-ring: rgb(51 112 255 / 12%);
+      --lark-shadow-1: rgb(31 35 41 / 4%);
+      --lark-shadow-2: rgb(31 35 41 / 8%);
+      --lark-shadow-3: rgb(31 35 41 / 12%);
       --lark-sidebar: 280px;
       --primary: #1f2329 !important;
       --secondary: #ffffff !important;
@@ -47,9 +70,52 @@
       --love: #f54a45 !important;
     }
 
+    /* 深色：对齐飞书网页端规范——暗色下中性色为 #ffffff 透明度梯度，底色 #17171a */
+    html.lark-doc-theme.lark-dark {
+      color-scheme: dark !important;
+      --lark-blue-strong: #7ea6ff;
+      --lark-bg: #17171a;
+      --lark-fill: #1f1f23;
+      --lark-fill-2: #232329;
+      --lark-fill-hover: rgb(255 255 255 / 6%);
+      --lark-hover: rgb(255 255 255 / 10%);
+      --lark-row-hover: rgb(255 255 255 / 6%);
+      --lark-line: rgb(255 255 255 / 12%);
+      --lark-line-2: rgb(255 255 255 / 8%);
+      --lark-line-soft: rgb(255 255 255 / 8%);
+      --lark-line-strong: rgb(255 255 255 / 20%);
+      --lark-text: rgb(255 255 255 / 89%);
+      --lark-text-2: rgb(255 255 255 / 69%);
+      --lark-text-3: rgb(255 255 255 / 50%);
+      --lark-text-4: rgb(255 255 255 / 69%);
+      --lark-text-5: rgb(255 255 255 / 80%);
+      --lark-text-6: rgb(255 255 255 / 89%);
+      --lark-active-bg: rgb(51 112 255 / 18%);
+      --lark-highlight: rgb(51 112 255 / 16%);
+      --lark-timeline: rgb(51 112 255 / 30%);
+      --lark-scrollbar: rgb(255 255 255 / 30%);
+      --lark-focus-ring: rgb(51 112 255 / 25%);
+      --lark-shadow-1: rgb(0 0 0 / 20%);
+      --lark-shadow-2: rgb(0 0 0 / 30%);
+      --lark-shadow-3: rgb(0 0 0 / 45%);
+      --primary: rgb(255 255 255 / 89%) !important;
+      --secondary: #17171a !important;
+      --header_background: #17171a !important;
+      --header_primary: rgb(255 255 255 / 89%) !important;
+      --highlight: rgb(51 112 255 / 16%) !important;
+      --primary-low: rgb(255 255 255 / 8%) !important;
+      --primary-very-low: #1f1f23 !important;
+      --primary-low-mid: rgb(255 255 255 / 12%) !important;
+      --primary-medium: rgb(255 255 255 / 50%) !important;
+      --primary-high: rgb(255 255 255 / 69%) !important;
+      --primary-very-high: rgb(255 255 255 / 80%) !important;
+      --d-selected: rgb(51 112 255 / 18%) !important;
+      --d-hover: rgb(255 255 255 / 6%) !important;
+    }
+
     html.lark-doc-theme,
     html.lark-doc-theme body {
-      background: #ffffff !important;
+      background: var(--lark-bg) !important;
       color: var(--lark-text) !important;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
         "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif !important;
@@ -61,7 +127,7 @@
     }
 
     html.lark-doc-theme * {
-      scrollbar-color: #bbbfc4 transparent;
+      scrollbar-color: var(--lark-scrollbar) transparent;
     }
 
     html.lark-doc-theme a {
@@ -111,8 +177,8 @@
           90deg,
           var(--lark-fill) 0,
           var(--lark-fill) var(--lark-sidebar),
-          #ffffff var(--lark-sidebar),
-          #ffffff 100%
+          var(--lark-bg) var(--lark-sidebar),
+          var(--lark-bg) 100%
         ) !important;
       border-bottom: 1px solid var(--lark-line) !important;
       box-shadow: none !important;
@@ -157,7 +223,7 @@
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      color: #1f2329;
+      color: var(--lark-text);
       font-size: 18px;
       font-weight: 600;
       white-space: nowrap;
@@ -185,14 +251,14 @@
       height: 36px !important;
       padding: 0 !important;
       border: 0 !important;
-      color: #646a73 !important;
+      color: var(--lark-text-2) !important;
       background: transparent !important;
       border-radius: 7px !important;
     }
 
     html.lark-doc-theme .d-header .header-sidebar-toggle button:hover,
     html.lark-doc-theme .d-header .hamburger-dropdown button:hover {
-      background: #e9eaec !important;
+      background: var(--lark-hover) !important;
     }
 
     html.lark-doc-theme .d-header .panel {
@@ -213,7 +279,7 @@
 
     html.lark-doc-theme .lark-topic-crumbs {
       overflow: hidden;
-      color: #4e5969;
+      color: var(--lark-text-4);
       font-size: 14px;
       line-height: 20px;
       text-overflow: ellipsis;
@@ -221,7 +287,7 @@
     }
 
     html.lark-doc-theme .lark-topic-meta {
-      color: #8f959e;
+      color: var(--lark-text-3);
       font-size: 12px;
       line-height: 20px;
       white-space: nowrap;
@@ -230,7 +296,7 @@
     html.lark-doc-theme .lark-topic-meta::before {
       content: "◆";
       margin-right: 6px;
-      color: #8f959e;
+      color: var(--lark-text-3);
       font-size: 8px;
     }
 
@@ -282,34 +348,34 @@
       box-sizing: border-box;
       border: 1px solid transparent;
       border-radius: 7px;
-      background: #ffffff;
-      color: #4e5969 !important;
+      background: var(--lark-bg);
+      color: var(--lark-text-4) !important;
       font-size: 14px;
       text-decoration: none !important;
-      box-shadow: 0 1px 2px rgb(31 35 41 / 4%);
+      box-shadow: 0 1px 2px var(--lark-shadow-1);
     }
 
     html.lark-doc-theme .lark-sidebar-search:hover {
-      border-color: #c9cdd4;
-      background: #ffffff !important;
+      border-color: var(--lark-line-strong);
+      background: var(--lark-bg) !important;
     }
 
     html.lark-doc-theme .lark-sidebar-search svg {
       width: 17px;
       height: 17px;
-      color: #646a73;
+      color: var(--lark-text-2);
       flex: none;
     }
 
     html.lark-doc-theme .sidebar-section {
       margin: 0 0 7px !important;
       padding: 0 0 7px !important;
-      border-bottom-color: #e6e8eb !important;
+      border-bottom-color: var(--lark-line-2) !important;
     }
 
     html.lark-doc-theme .sidebar-section-header {
       padding: 4px 10px !important;
-      color: #8f959e !important;
+      color: var(--lark-text-3) !important;
       font-size: 12px !important;
       font-weight: 500 !important;
     }
@@ -320,20 +386,20 @@
     }
 
     html.lark-doc-theme .sidebar-section-link-wrapper:hover {
-      background: #e9eaec !important;
+      background: var(--lark-hover) !important;
     }
 
     html.lark-doc-theme .sidebar-section-link-wrapper.is-active,
     html.lark-doc-theme .sidebar-section-link-wrapper.active,
     html.lark-doc-theme .sidebar-section-link-wrapper[data-list-item-name="everything"]:has(a.active) {
-      background: #dfe7f9 !important;
+      background: var(--lark-active-bg) !important;
     }
 
     html.lark-doc-theme .sidebar-section-link {
       min-height: 38px !important;
       padding: 0 10px !important;
       border-radius: 7px !important;
-      color: #373c43 !important;
+      color: var(--lark-text-5) !important;
       font-size: 15px !important;
       font-weight: 400 !important;
     }
@@ -341,18 +407,18 @@
     html.lark-doc-theme .sidebar-section-link-wrapper.is-active .sidebar-section-link,
     html.lark-doc-theme .sidebar-section-link-wrapper.active .sidebar-section-link,
     html.lark-doc-theme .sidebar-section-link.active {
-      color: #245bdb !important;
+      color: var(--lark-blue-strong) !important;
       font-weight: 500 !important;
     }
 
     html.lark-doc-theme .sidebar-section-link .sidebar-section-link-prefix,
     html.lark-doc-theme .sidebar-section-link .d-icon {
-      color: #646a73 !important;
+      color: var(--lark-text-2) !important;
     }
 
     html.lark-doc-theme .sidebar-section-link-wrapper.is-active .d-icon,
     html.lark-doc-theme .sidebar-section-link.active .d-icon {
-      color: #3370ff !important;
+      color: var(--lark-blue) !important;
     }
 
     html.lark-doc-theme .sidebar-section-link-content-text {
@@ -361,17 +427,17 @@
 
     html.lark-doc-theme .sidebar-footer-wrapper {
       background: var(--lark-fill) !important;
-      border-top: 1px solid #e6e8eb !important;
+      border-top: 1px solid var(--lark-line-2) !important;
       box-shadow: none !important;
     }
 
     html.lark-doc-theme .sidebar-footer-actions-button {
       border-radius: 7px !important;
-      color: #646a73 !important;
+      color: var(--lark-text-2) !important;
     }
 
     html.lark-doc-theme .sidebar-footer-actions-button:hover {
-      background: #e9eaec !important;
+      background: var(--lark-hover) !important;
     }
 
     /* 主内容基础布局 */
@@ -395,7 +461,7 @@
       min-height: calc(100vh - 64px) !important;
       padding: 22px 28px 80px !important;
       box-sizing: border-box !important;
-      background: #ffffff !important;
+      background: var(--lark-bg) !important;
     }
 
     html.lark-doc-theme #main-outlet-wrapper:not(:has(> .sidebar-wrapper)) {
@@ -419,7 +485,7 @@
     }
 
     html.lark-doc-theme body:not(.has-sidebar-page) .d-header {
-      background: #ffffff !important;
+      background: var(--lark-bg) !important;
     }
 
     html.lark-doc-theme body:not(.has-sidebar-page) .lark-topic-context {
@@ -455,7 +521,7 @@
       align-items: center;
       height: 64px;
       margin: 0;
-      color: #1f2329;
+      color: var(--lark-text);
       font-size: 20px;
       font-weight: 600;
       line-height: 28px;
@@ -480,8 +546,8 @@
     html.lark-doc-theme .sidebar-wrapper .combo-box-header {
       min-height: 34px;
       border-radius: 7px !important;
-      background: #ffffff !important;
-      color: #373c43 !important;
+      background: var(--lark-bg) !important;
+      color: var(--lark-text-5) !important;
       box-shadow: none !important;
       font-weight: 400 !important;
     }
@@ -490,7 +556,7 @@
     html.lark-doc-theme .d-header .combo-box-header:hover,
     html.lark-doc-theme .sidebar-wrapper .select-kit-header:hover,
     html.lark-doc-theme .sidebar-wrapper .combo-box-header:hover {
-      background: #f7f8fa !important;
+      background: var(--lark-fill-2) !important;
     }
 
     html.lark-doc-theme .sidebar-section-header,
@@ -569,7 +635,7 @@
       border: 0 !important;
       border-radius: 7px !important;
       background: transparent !important;
-      color: #646a73 !important;
+      color: var(--lark-text-2) !important;
       font-size: 0 !important;
       box-shadow: none !important;
     }
@@ -616,7 +682,7 @@
       border: 0 !important;
       border-radius: 0 !important;
       background: transparent !important;
-      color: #646a73 !important;
+      color: var(--lark-text-2) !important;
       font-size: 14px !important;
       font-weight: 400 !important;
     }
@@ -625,7 +691,7 @@
     html.lark-doc-theme.lark-doc-home .nav-pills > li.active > a,
     html.lark-doc-theme.lark-doc-home .nav-pills > li > button.active {
       position: relative;
-      color: #245bdb !important;
+      color: var(--lark-blue-strong) !important;
     }
 
     html.lark-doc-theme.lark-doc-home .nav-pills > li > a.active::after,
@@ -650,7 +716,7 @@
 
     html.lark-doc-theme.lark-doc-home .topic-list-header {
       height: 42px !important;
-      color: #8f959e !important;
+      color: var(--lark-text-3) !important;
       font-size: 13px !important;
       font-weight: 400 !important;
     }
@@ -659,7 +725,7 @@
       height: 42px !important;
       padding: 0 12px !important;
       border-bottom: 1px solid var(--lark-line) !important;
-      color: #8f959e !important;
+      color: var(--lark-text-3) !important;
       font-size: 0 !important;
       font-weight: 400 !important;
       text-align: left !important;
@@ -667,7 +733,7 @@
     }
 
     html.lark-doc-theme.lark-doc-home .topic-list-header th .lark-column-label {
-      color: #8f959e !important;
+      color: var(--lark-text-3) !important;
       font-size: 13px !important;
     }
 
@@ -679,14 +745,14 @@
     html.lark-doc-theme.lark-doc-home .topic-list-item,
     html.lark-doc-theme.lark-doc-home .topic-list-body .topic-list-item {
       height: 64px !important;
-      background: #ffffff !important;
+      background: var(--lark-bg) !important;
       border: 0 !important;
       transition: background-color 120ms ease;
     }
 
     html.lark-doc-theme.lark-doc-home .topic-list-item:hover,
     html.lark-doc-theme.lark-doc-home .topic-list-item.selected {
-      background: #f2f3f5 !important;
+      background: var(--lark-row-hover) !important;
     }
 
     html.lark-doc-theme.lark-doc-home .topic-list-item > td,
@@ -694,7 +760,7 @@
       height: 64px !important;
       padding: 8px 12px !important;
       border-bottom: 1px solid var(--lark-line-soft) !important;
-      color: #646a73 !important;
+      color: var(--lark-text-2) !important;
       vertical-align: middle !important;
       box-sizing: border-box !important;
     }
@@ -733,7 +799,7 @@
     html.lark-doc-theme.lark-doc-home .topic-list-item .title,
     html.lark-doc-theme.lark-doc-home .topic-list-item .title a,
     html.lark-doc-theme.lark-doc-home .topic-list-item .link-top-line a.title {
-      color: #2b2f36 !important;
+      color: var(--lark-text-6) !important;
       font-size: 15px !important;
       font-weight: 400 !important;
       line-height: 22px !important;
@@ -743,20 +809,20 @@
     html.lark-doc-theme.lark-doc-home .topic-list-item .title:hover,
     html.lark-doc-theme.lark-doc-home .topic-list-item .title a:hover,
     html.lark-doc-theme.lark-doc-home .topic-list-item .link-top-line a.title:hover {
-      color: #245bdb !important;
+      color: var(--lark-blue-strong) !important;
     }
 
     html.lark-doc-theme.lark-doc-home .topic-list-item .link-bottom-line,
     html.lark-doc-theme.lark-doc-home .topic-list-item .discourse-tags,
     html.lark-doc-theme.lark-doc-home .topic-list-item .badge-wrapper {
-      color: #8f959e !important;
+      color: var(--lark-text-3) !important;
       font-size: 12px !important;
     }
 
     html.lark-doc-theme.lark-doc-home .topic-list-item .posters img {
       width: 25px !important;
       height: 25px !important;
-      border: 2px solid #ffffff !important;
+      border: 2px solid var(--lark-bg) !important;
       border-radius: 50% !important;
       box-sizing: border-box !important;
     }
@@ -768,7 +834,7 @@
     html.lark-doc-theme.lark-doc-home .topic-list-item .posts,
     html.lark-doc-theme.lark-doc-home .topic-list-item .views,
     html.lark-doc-theme.lark-doc-home .topic-list-item .activity {
-      color: #646a73 !important;
+      color: var(--lark-text-2) !important;
       font-size: 13px !important;
       font-weight: 400 !important;
     }
@@ -784,8 +850,8 @@
       padding: 7px 16px !important;
       border: 0 !important;
       border-radius: 7px !important;
-      background: #e8f0ff !important;
-      color: #245bdb !important;
+      background: var(--lark-highlight) !important;
+      color: var(--lark-blue-strong) !important;
     }
 
     /* 话题页：主帖是文档，回复是评论线程 */
@@ -809,7 +875,7 @@
     html.lark-doc-theme.lark-doc-topic #topic-title .fancy-title,
     html.lark-doc-theme.lark-doc-topic #topic-title .fancy-title a {
       margin: 0 !important;
-      color: #1f2329 !important;
+      color: var(--lark-text) !important;
       font-size: clamp(28px, 2.2vw, 38px) !important;
       font-weight: 700 !important;
       line-height: 1.35 !important;
@@ -821,7 +887,7 @@
     html.lark-doc-theme.lark-doc-topic #topic-title .badge-wrapper,
     html.lark-doc-theme.lark-doc-topic #topic-title .discourse-tags {
       margin-top: 8px !important;
-      color: #8f959e !important;
+      color: var(--lark-text-3) !important;
       font-size: 13px !important;
     }
 
@@ -847,7 +913,7 @@
 
     html.lark-doc-theme.lark-doc-topic .topic-timeline {
       margin-left: 0 !important;
-      color: #8f959e !important;
+      color: var(--lark-text-3) !important;
     }
 
     html.lark-doc-theme.lark-doc-topic .timeline-container {
@@ -855,19 +921,19 @@
     }
 
     html.lark-doc-theme.lark-doc-topic .timeline-scrollarea {
-      border-left-color: #dbe8ff !important;
+      border-left-color: var(--lark-timeline) !important;
     }
 
     html.lark-doc-theme.lark-doc-topic .timeline-handle {
       width: 5px !important;
       border-radius: 4px !important;
-      background: #82a7fc !important;
+      background: var(--lark-blue-soft) !important;
     }
 
     html.lark-doc-theme.lark-doc-topic .timeline-date-wrapper,
     html.lark-doc-theme.lark-doc-topic .timeline-ago,
     html.lark-doc-theme.lark-doc-topic .timeline-replies {
-      color: #8f959e !important;
+      color: var(--lark-text-3) !important;
       font-size: 12px !important;
     }
 
@@ -876,27 +942,27 @@
     html.lark-doc-theme .composer-popup,
     html.lark-doc-theme #reply-control {
       border-color: var(--lark-line) !important;
-      background: #ffffff !important;
-      box-shadow: 0 -4px 20px rgb(31 35 41 / 8%) !important;
+      background: var(--lark-bg) !important;
+      box-shadow: 0 -4px 20px var(--lark-shadow-2) !important;
     }
 
     html.lark-doc-theme .d-editor-textarea-wrapper,
     html.lark-doc-theme .d-editor-input {
-      border-color: #c9cdd4 !important;
+      border-color: var(--lark-line-strong) !important;
       border-radius: 8px !important;
-      background: #ffffff !important;
-      color: #1f2329 !important;
+      background: var(--lark-bg) !important;
+      color: var(--lark-text) !important;
       box-shadow: none !important;
     }
 
     html.lark-doc-theme .d-editor-textarea-wrapper:focus-within {
-      border-color: #82a7fc !important;
-      box-shadow: 0 0 0 2px rgb(51 112 255 / 12%) !important;
+      border-color: var(--lark-blue-soft) !important;
+      box-shadow: 0 0 0 2px var(--lark-focus-ring) !important;
     }
 
     html.lark-doc-theme .d-editor-button-bar {
       border-color: var(--lark-line-soft) !important;
-      background: #f7f8fa !important;
+      background: var(--lark-fill-2) !important;
     }
 
     html.lark-doc-theme .d-editor-button-bar .btn {
@@ -909,14 +975,14 @@
     html.lark-doc-theme .dropdown-menu {
       border: 1px solid var(--lark-line) !important;
       border-radius: 8px !important;
-      background: #ffffff !important;
-      box-shadow: 0 8px 24px rgb(31 35 41 / 12%) !important;
+      background: var(--lark-bg) !important;
+      box-shadow: 0 8px 24px var(--lark-shadow-3) !important;
     }
 
     html.lark-doc-theme .select-kit-row:hover,
     html.lark-doc-theme .select-kit-row.is-highlighted,
     html.lark-doc-theme .menu-panel li:hover {
-      background: #f2f3f5 !important;
+      background: var(--lark-row-hover) !important;
     }
 
     /* 窄屏只保证可用，不另做移动端仿制 */
@@ -1005,6 +1071,23 @@
         attributeFilter: ["href", "rel", "type", "sizes"]
       });
     }
+  }
+
+  // 对齐 linux.do 自身的颜色模式：深色配色样式表 link 的 media 表达 浅色/深色/自动
+  function isDarkMode() {
+    const darkLink = document.querySelector("link.dark-scheme");
+    if (!darkLink) return false; // 站点未启用深色配色
+    if (darkLink.media === "all") return true; // 用户强制深色
+    if (darkLink.media === "none") return false; // 用户强制浅色
+    try {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches; // 自动：跟随系统
+    } catch {
+      return false;
+    }
+  }
+
+  function applyColorMode() {
+    document.documentElement.classList.toggle(DARK_CLASS, isDarkMode());
   }
 
   function makeSidebarSearch() {
@@ -1157,6 +1240,7 @@
   function applyTheme() {
     injectStyle();
     document.documentElement.classList.add("lark-doc-theme");
+    applyColorMode();
     if (!document.body) return;
 
     const isTopic = /^\/t\//.test(location.pathname);
@@ -1200,6 +1284,18 @@
 
     injectStyle();
     document.documentElement.classList.add("lark-doc-theme");
+    applyColorMode();
+
+    try {
+      localStorage.removeItem("lark-doc-theme-mode"); // 清理旧版手动切换的遗留设置
+      const colorMedia = window.matchMedia("(prefers-color-scheme: dark)");
+      const onColorChange = () => applyColorMode();
+      if (colorMedia.addEventListener) {
+        colorMedia.addEventListener("change", onColorChange);
+      } else if (colorMedia.addListener) {
+        colorMedia.addListener(onColorChange);
+      }
+    } catch {}
 
     const observer = new MutationObserver(scheduleApply);
     observer.observe(document.documentElement, { childList: true, subtree: true });
