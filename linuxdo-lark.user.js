@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      1.4.0
+// @version      1.4.1
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -819,16 +819,18 @@
       font-size: 12px !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item .posters img {
-      width: 25px !important;
-      height: 25px !important;
-      border: 2px solid var(--lark-bg) !important;
-      border-radius: 50% !important;
-      box-sizing: border-box !important;
+    html.lark-doc-theme.lark-doc-home .topic-list-item .posters > :not(.lark-owner-name) {
+      display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item .posters a:not(:first-child) {
-      margin-left: -7px !important;
+    html.lark-doc-theme.lark-doc-home .topic-list-item .posters .lark-owner-name {
+      display: block;
+      overflow: hidden;
+      color: var(--lark-text-2) !important;
+      font-size: 13px !important;
+      font-weight: 400 !important;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     html.lark-doc-theme.lark-doc-home .topic-list-item .posts,
@@ -1236,6 +1238,28 @@
     }
   }
 
+  function makeOwnerNames() {
+    for (const cell of document.querySelectorAll(".topic-list-item .posters")) {
+      const ownerName = cell
+        .querySelector("[data-user-card]")
+        ?.getAttribute("data-user-card")
+        ?.trim();
+      let label = cell.querySelector(":scope > .lark-owner-name");
+
+      if (!ownerName) {
+        label?.remove();
+        continue;
+      }
+
+      if (!label) {
+        label = document.createElement("span");
+        label.className = "lark-owner-name";
+        cell.appendChild(label);
+      }
+      if (label.textContent !== ownerName) label.textContent = ownerName;
+    }
+  }
+
 
   function applyTheme() {
     injectStyle();
@@ -1263,6 +1287,7 @@
       makeHomeHeading();
       makeCreateTopicButton();
       makeColumnLabels();
+      makeOwnerNames();
     }
   }
 
