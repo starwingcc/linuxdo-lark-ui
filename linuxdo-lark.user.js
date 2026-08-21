@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      1.4.2
+// @version      1.4.3
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -789,6 +789,9 @@
       padding-left: 39px !important;
       box-sizing: border-box !important;
     }
+    html.lark-doc-theme.lark-doc-home .topic-list-item .main-link .badge-category__wrapper{
+      font-size: 12px;
+    }
 
     html.lark-doc-theme.lark-doc-home .topic-list-item .main-link::before {
       content: "";
@@ -811,7 +814,7 @@
     html.lark-doc-theme.lark-doc-home .topic-list-item .title a,
     html.lark-doc-theme.lark-doc-home .topic-list-item .link-top-line a.title {
       color: var(--lark-text-6) !important;
-      font-size: 15px !important;
+      font-size: 16px !important;
       font-weight: 400 !important;
       line-height: 22px !important;
       text-decoration: none !important;
@@ -1325,7 +1328,7 @@
       } else if (colorMedia.addListener) {
         colorMedia.addListener(onColorChange);
       }
-    } catch {}
+    } catch { }
 
     const observer = new MutationObserver(scheduleApply);
     observer.observe(document.documentElement, { childList: true, subtree: true });
