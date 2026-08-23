@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      2.6.7
+// @version      2.8.3
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -18,9 +18,10 @@
   const HOME_CLASS = "lark-doc-home";
   const TOPIC_CLASS = "lark-doc-topic";
   const DARK_CLASS = "lark-dark";
+  const POST_ROWS_THEME_CLASS = "lark-post-rows-themed";
+  const POST_ROWS_MODE_KEY = "linuxdo-lark-post-rows-mode";
   let faviconObserver;
-  let topicOwnerKey = "";
-  let topicOwnerUsername = "";
+  let postRowsModeFallback = "document";
   let topicToolsCloseTimer;
 
   const LARK_LOGO_SVG = `<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" data-icon="LarkLogoColorful" aria-hidden="true">
@@ -30,13 +31,12 @@
   </svg>`;
   const LARK_LOGO_DATA_URL = `data:image/svg+xml,${encodeURIComponent(LARK_LOGO_SVG)}`;
 
-  const CSS = String.raw`
-    html.lark-doc-theme {
+  const RAW_CSS = String.raw`
+    .lark-doc-theme {
       color-scheme: light !important;
       --lark-blue: #3370ff;
       --lark-blue-strong: #245bdb;
       --lark-blue-soft: #82a7fc;
-      --lark-red: #f54a45;
       --lark-bg: #ffffff;
       --lark-fill: #f5f6f7;
       --lark-fill-2: #f7f8fa;
@@ -55,7 +55,6 @@
       --lark-text-6: #2b2f36;
       --lark-active-bg: #dfe7f9;
       --lark-highlight: #e8f0ff;
-      --lark-timeline: #dbe8ff;
       --lark-scrollbar: #bbbfc4;
       --lark-focus-ring: rgb(51 112 255 / 12%);
       --lark-shadow-1: rgb(31 35 41 / 4%);
@@ -81,7 +80,7 @@
     }
 
     /* 深色：对齐飞书网页端规范——暗色下中性色为 #ffffff 透明度梯度，底色 #17171a */
-    html.lark-doc-theme.lark-dark {
+    .lark-doc-theme.lark-dark {
       color-scheme: dark !important;
       --lark-blue-strong: #7ea6ff;
       --lark-bg: #17171a;
@@ -102,7 +101,6 @@
       --lark-text-6: rgb(255 255 255 / 89%);
       --lark-active-bg: rgb(51 112 255 / 18%);
       --lark-highlight: rgb(51 112 255 / 16%);
-      --lark-timeline: rgb(51 112 255 / 30%);
       --lark-scrollbar: rgb(255 255 255 / 30%);
       --lark-focus-ring: rgb(51 112 255 / 25%);
       --lark-shadow-1: rgb(0 0 0 / 20%);
@@ -123,49 +121,46 @@
       --d-hover: rgb(255 255 255 / 6%) !important;
     }
 
-    html.lark-doc-theme,
-    html.lark-doc-theme body {
+    .lark-doc-theme,
+    .lark-doc-theme body {
       background: var(--lark-bg) !important;
       color: var(--lark-text) !important;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
         "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif !important;
     }
 
-    html.lark-doc-theme body {
+    .lark-doc-theme body {
       min-width: 980px;
       margin: 0 !important;
     }
 
-    html.lark-doc-theme * {
+    .lark-doc-theme * {
       scrollbar-color: var(--lark-scrollbar) transparent;
     }
 
-    html.lark-doc-theme a {
+    .lark-doc-theme a {
       color: inherit;
     }
 
     /* 帖子正文链接恢复飞书蓝，避免被上方全局 inherit 染黑 */
-    html.lark-doc-theme .cooked a {
+    .lark-doc-theme.${POST_ROWS_THEME_CLASS} .cooked a {
       color: var(--lark-blue) !important;
     }
 
-    html.lark-doc-theme .global-notice,
-    html.lark-doc-theme .category-breadcrumb,
-    html.lark-doc-theme .top-lists,
-    html.lark-doc-theme .navigation-controls,
-    html.lark-doc-theme .topic-map.--bottom {
+    .lark-doc-theme .global-notice,
+    .lark-doc-theme .category-breadcrumb,
+    .lark-doc-theme .top-lists,
+    .lark-doc-theme .navigation-controls,
+    .lark-doc-theme .topic-map.--bottom {
       display: none !important;
     }
 
-    html.lark-doc-theme button,
-    html.lark-doc-theme input,
-    html.lark-doc-theme textarea,
-    html.lark-doc-theme select {
+    .lark-doc-theme :is(button, input, textarea, select) {
       font-family: inherit !important;
     }
 
     /* 顶栏与品牌 */
-    html.lark-doc-theme .d-header-wrap {
+    .lark-doc-theme .d-header-wrap {
       position: fixed !important;
       z-index: 1100 !important;
       top: 0 !important;
@@ -174,7 +169,7 @@
       height: 64px !important;
     }
 
-    html.lark-doc-theme body .d-header {
+    .lark-doc-theme body .d-header {
       position: fixed !important;
       z-index: 1101 !important;
       top: 0 !important;
@@ -194,27 +189,27 @@
       box-shadow: none !important;
     }
 
-    html.lark-doc-theme .d-header .wrap {
+    .lark-doc-theme .d-header .wrap {
       width: 100% !important;
       max-width: none !important;
       padding: 0 16px !important;
       box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme .d-header .contents {
+    .lark-doc-theme .d-header .contents {
       position: relative !important;
       height: 64px !important;
       display: flex !important;
       align-items: center !important;
     }
 
-    html.lark-doc-theme .d-header .title {
+    .lark-doc-theme .d-header .title {
       width: calc(var(--lark-sidebar) - 70px) !important;
       min-width: calc(var(--lark-sidebar) - 70px) !important;
       margin: 0 0 0 4px !important;
     }
 
-    html.lark-doc-theme .d-header .title a {
+    .lark-doc-theme .d-header .title a {
       display: inline-flex !important;
       align-items: center !important;
       height: 40px !important;
@@ -222,14 +217,11 @@
       text-decoration: none !important;
     }
 
-    html.lark-doc-theme .d-header .title img,
-    html.lark-doc-theme .d-header .title picture,
-    html.lark-doc-theme .d-header .title .logo-big,
-    html.lark-doc-theme .d-header .title .logo-small {
+    .lark-doc-theme .d-header .title :is(img, picture, .logo-big, .logo-small) {
       display: none !important;
     }
 
-    html.lark-doc-theme .lark-brand {
+    .lark-doc-theme .lark-brand {
       display: inline-flex;
       align-items: center;
       gap: 10px;
@@ -240,7 +232,7 @@
       letter-spacing: -0.2px;
     }
 
-    html.lark-doc-theme .d-header-icons {
+    .lark-doc-theme .d-header-icons {
       display: flex !important;
       align-items: center !important;
       margin: 0 !important;
@@ -248,18 +240,17 @@
       list-style: none !important;
     }
 
-    html.lark-doc-theme .lark-brand svg {
+    .lark-doc-theme .lark-brand svg {
       width: 25px;
       height: 25px;
       flex: none;
     }
 
-    html.lark-doc-theme #d-splash .splash-logo-container {
+    .lark-doc-theme #d-splash .splash-logo-container {
       background-image: url("${LARK_LOGO_DATA_URL}") !important;
     }
 
-    html.lark-doc-theme .d-header .header-sidebar-toggle button,
-    html.lark-doc-theme .d-header .hamburger-dropdown button {
+    .lark-doc-theme .d-header :is(.header-sidebar-toggle, .hamburger-dropdown) button {
       width: 36px !important;
       min-width: 36px !important;
       height: 36px !important;
@@ -270,18 +261,17 @@
       border-radius: 7px !important;
     }
 
-    html.lark-doc-theme .d-header .header-sidebar-toggle button:hover,
-    html.lark-doc-theme .d-header .hamburger-dropdown button:hover {
+    .lark-doc-theme .d-header :is(.header-sidebar-toggle, .hamburger-dropdown) button:hover {
       background: var(--lark-hover) !important;
     }
 
-    html.lark-doc-theme .d-header .panel {
+    .lark-doc-theme .d-header .panel {
       position: relative !important;
       z-index: 3 !important;
       margin-left: auto !important;
     }
 
-    html.lark-doc-theme .lark-topic-context {
+    .lark-doc-theme .lark-topic-context {
       position: absolute;
       left: calc(var(--lark-sidebar) + 16px);
       right: 280px;
@@ -291,7 +281,7 @@
       pointer-events: none;
     }
 
-    html.lark-doc-theme .lark-topic-crumbs {
+    .lark-doc-theme .lark-topic-crumbs {
       overflow: hidden;
       color: var(--lark-text-4);
       font-size: 14px;
@@ -300,26 +290,26 @@
       white-space: nowrap;
     }
 
-    html.lark-doc-theme .lark-topic-meta {
+    .lark-doc-theme .lark-topic-meta {
       color: var(--lark-text-3);
       font-size: 12px;
       line-height: 20px;
       white-space: nowrap;
     }
 
-    html.lark-doc-theme .lark-topic-meta::before {
+    .lark-doc-theme .lark-topic-meta::before {
       content: "◆";
       margin-right: 6px;
       color: var(--lark-text-3);
       font-size: 8px;
     }
 
-    html.lark-doc-theme.lark-doc-topic .d-header .extra-info-wrapper {
+    .lark-doc-topic .d-header .extra-info-wrapper {
       display: none !important;
     }
 
     /* 左侧导航：保留全部 Linux DO 导航，仅换外观 */
-    html.lark-doc-theme .sidebar-wrapper {
+    .lark-doc-theme .sidebar-wrapper {
       width: var(--lark-sidebar) !important;
       min-width: var(--lark-sidebar) !important;
       height: calc(100vh - 64px) !important;
@@ -333,7 +323,7 @@
       box-shadow: none !important;
     }
 
-    html.lark-doc-theme .sidebar-container {
+    .lark-doc-theme .sidebar-container {
       width: var(--lark-sidebar) !important;
       height: 100% !important;
       display: flex !important;
@@ -344,13 +334,13 @@
       background: var(--lark-fill) !important;
     }
 
-    html.lark-doc-theme .sidebar-sections {
+    .lark-doc-theme .sidebar-sections {
       flex: 1 1 auto !important;
       overflow: auto !important;
       padding: 0 !important;
     }
 
-    html.lark-doc-theme .lark-sidebar-search {
+    .lark-doc-theme .lark-sidebar-search {
       display: flex;
       flex: 0 0 36px;
       align-items: center;
@@ -369,47 +359,49 @@
       box-shadow: 0 1px 2px var(--lark-shadow-1);
     }
 
-    html.lark-doc-theme .lark-sidebar-search:hover {
+    .lark-doc-theme .lark-sidebar-search:hover {
       border-color: var(--lark-line-strong);
       background: var(--lark-bg) !important;
     }
 
-    html.lark-doc-theme .lark-sidebar-search svg {
+    .lark-doc-theme .lark-sidebar-search svg {
       width: 17px;
       height: 17px;
       color: var(--lark-text-2);
       flex: none;
     }
 
-    html.lark-doc-theme .sidebar-section {
+    .lark-doc-theme .sidebar-section {
       margin: 0 0 7px !important;
       padding: 0 0 7px !important;
       border-bottom-color: var(--lark-line-2) !important;
     }
 
-    html.lark-doc-theme .sidebar-section-header {
+    .lark-doc-theme .sidebar-section-header {
       padding: 4px 10px !important;
       color: var(--lark-text-3) !important;
       font-size: 12px !important;
       font-weight: 500 !important;
     }
 
-    html.lark-doc-theme .sidebar-section-link-wrapper {
+    .lark-doc-theme .sidebar-section-link-wrapper {
       margin: 1px 0 !important;
       border-radius: 7px !important;
     }
 
-    html.lark-doc-theme .sidebar-section-link-wrapper:hover {
+    .lark-doc-theme .sidebar-section-link-wrapper:hover {
       background: var(--lark-hover) !important;
     }
 
-    html.lark-doc-theme .sidebar-section-link-wrapper.is-active,
-    html.lark-doc-theme .sidebar-section-link-wrapper.active,
-    html.lark-doc-theme .sidebar-section-link-wrapper[data-list-item-name="everything"]:has(a.active) {
+    .lark-doc-theme .sidebar-section-link-wrapper:is(
+      .is-active,
+      .active,
+      [data-list-item-name="everything"]:has(a.active)
+    ) {
       background: var(--lark-active-bg) !important;
     }
 
-    html.lark-doc-theme .sidebar-section-link {
+    .lark-doc-theme .sidebar-section-link {
       min-height: 38px !important;
       padding: 0 10px !important;
       border-radius: 7px !important;
@@ -418,44 +410,47 @@
       font-weight: 400 !important;
     }
 
-    html.lark-doc-theme .sidebar-section-link-wrapper.is-active .sidebar-section-link,
-    html.lark-doc-theme .sidebar-section-link-wrapper.active .sidebar-section-link,
-    html.lark-doc-theme .sidebar-section-link.active {
+    .lark-doc-theme :is(
+      .sidebar-section-link-wrapper.is-active .sidebar-section-link,
+      .sidebar-section-link-wrapper.active .sidebar-section-link,
+      .sidebar-section-link.active
+    ) {
       color: var(--lark-blue-strong) !important;
       font-weight: 500 !important;
     }
 
-    html.lark-doc-theme .sidebar-section-link .sidebar-section-link-prefix,
-    html.lark-doc-theme .sidebar-section-link .d-icon {
+    .lark-doc-theme .sidebar-section-link :is(.sidebar-section-link-prefix, .d-icon) {
       color: var(--lark-text-2) !important;
     }
 
-    html.lark-doc-theme .sidebar-section-link-wrapper.is-active .d-icon,
-    html.lark-doc-theme .sidebar-section-link.active .d-icon {
+    .lark-doc-theme :is(
+      .sidebar-section-link-wrapper.is-active,
+      .sidebar-section-link.active
+    ) .d-icon {
       color: var(--lark-blue) !important;
     }
 
-    html.lark-doc-theme .sidebar-section-link-content-text {
+    .lark-doc-theme .sidebar-section-link-content-text {
       line-height: 20px !important;
     }
 
-    html.lark-doc-theme .sidebar-footer-wrapper {
+    .lark-doc-theme .sidebar-footer-wrapper {
       background: var(--lark-fill) !important;
       border-top: 1px solid var(--lark-line-2) !important;
       box-shadow: none !important;
     }
 
-    html.lark-doc-theme .sidebar-footer-actions-button {
+    .lark-doc-theme .sidebar-footer-actions-button {
       border-radius: 7px !important;
       color: var(--lark-text-2) !important;
     }
 
-    html.lark-doc-theme .sidebar-footer-actions-button:hover {
+    .lark-doc-theme .sidebar-footer-actions-button:hover {
       background: var(--lark-hover) !important;
     }
 
     /* 主内容基础布局 */
-    html.lark-doc-theme #main-outlet-wrapper {
+    .lark-doc-theme #main-outlet-wrapper {
       width: 100% !important;
       max-width: none !important;
       display: grid !important;
@@ -468,7 +463,7 @@
       padding: 0 !important;
     }
 
-    html.lark-doc-theme #main-outlet {
+    .lark-doc-theme #main-outlet {
       width: auto !important;
       max-width: none !important;
       min-width: 0 !important;
@@ -478,54 +473,51 @@
       background: var(--lark-bg) !important;
     }
 
-    html.lark-doc-theme #main-outlet-wrapper:not(:has(> .sidebar-wrapper)) {
-      grid-template-columns: minmax(0, 1fr) !important;
-    }
-
-    html.lark-doc-theme body:not(.has-sidebar-page) .sidebar-wrapper {
+    .lark-doc-theme body:not(.has-sidebar-page) .sidebar-wrapper {
       display: none !important;
     }
 
-    html.lark-doc-theme body:not(.has-sidebar-page) #main-outlet-wrapper {
+    .lark-doc-theme #main-outlet-wrapper:not(:has(> .sidebar-wrapper)),
+    .lark-doc-theme body:not(.has-sidebar-page) #main-outlet-wrapper {
       grid-template-columns: minmax(0, 1fr) !important;
     }
 
-    html.lark-doc-theme body:not(.has-sidebar-page) #main-outlet {
+    .lark-doc-theme body:not(.has-sidebar-page) #main-outlet {
       grid-column: 1 !important;
     }
 
-    html.lark-doc-theme body:not(.has-sidebar-page) .d-header .title {
+    .lark-doc-theme body:not(.has-sidebar-page) .d-header .title {
       display: none !important;
     }
 
-    html.lark-doc-theme body:not(.has-sidebar-page) .d-header {
+    .lark-doc-theme body:not(.has-sidebar-page) .d-header {
       background: var(--lark-bg) !important;
     }
 
-    html.lark-doc-theme body:not(.has-sidebar-page) .lark-topic-context {
+    .lark-doc-theme body:not(.has-sidebar-page) .lark-topic-context {
       left: 72px;
     }
 
-    html.lark-doc-theme.lark-doc-home #main-outlet-wrapper {
+    .lark-doc-home #main-outlet-wrapper {
       min-height: 100vh !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .sidebar-wrapper {
+    .lark-doc-home .sidebar-wrapper {
       top: 0 !important;
       height: 100vh !important;
       min-height: 100vh !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .sidebar-container {
+    .lark-doc-home .sidebar-container {
       padding-top: 72px !important;
     }
 
-    html.lark-doc-theme.lark-doc-home #main-outlet {
+    .lark-doc-home #main-outlet {
       min-height: 100vh !important;
       padding-top: 86px !important;
     }
 
-    html.lark-doc-theme .lark-home-heading {
+    .lark-doc-theme .lark-home-heading {
       position: absolute;
       z-index: 2;
       top: 0;
@@ -543,21 +535,19 @@
       pointer-events: none;
     }
 
-    html.lark-doc-theme body:not(.has-sidebar-page) .lark-home-heading {
+    .lark-doc-theme body:not(.has-sidebar-page) .lark-home-heading {
       left: 72px;
     }
 
-    html.lark-doc-theme .alert,
-    html.lark-doc-theme .banner-box,
-    html.lark-doc-theme .custom-homepage-columns {
+    .lark-doc-theme .alert,
+    .lark-doc-theme .banner-box,
+    .lark-doc-theme .custom-homepage-columns {
       border-radius: 8px !important;
       box-shadow: none !important;
     }
 
-    html.lark-doc-theme .d-header .select-kit-header,
-    html.lark-doc-theme .d-header .combo-box-header,
-    html.lark-doc-theme .sidebar-wrapper .select-kit-header,
-    html.lark-doc-theme .sidebar-wrapper .combo-box-header {
+    .lark-doc-theme :is(.d-header, .sidebar-wrapper)
+      :is(.select-kit-header, .combo-box-header) {
       min-height: 34px;
       border-radius: 7px !important;
       background: var(--lark-bg) !important;
@@ -566,18 +556,16 @@
       font-weight: 400 !important;
     }
 
-    html.lark-doc-theme .d-header .select-kit-header:hover,
-    html.lark-doc-theme .d-header .combo-box-header:hover,
-    html.lark-doc-theme .sidebar-wrapper .select-kit-header:hover,
-    html.lark-doc-theme .sidebar-wrapper .combo-box-header:hover {
+    .lark-doc-theme :is(.d-header, .sidebar-wrapper)
+      :is(.select-kit-header, .combo-box-header):hover {
       background: var(--lark-fill-2) !important;
     }
 
-    html.lark-doc-theme .sidebar-section-header,
-    html.lark-doc-theme .sidebar-section-header.btn,
-    html.lark-doc-theme .sidebar-section-header button,
-    html.lark-doc-theme .sidebar-section-header .btn,
-    html.lark-doc-theme .sidebar-section-header .select-kit-header {
+    .lark-doc-theme .sidebar-section-header,
+    .lark-doc-theme .sidebar-section-header.btn,
+    .lark-doc-theme .sidebar-section-header button,
+    .lark-doc-theme .sidebar-section-header .btn,
+    .lark-doc-theme .sidebar-section-header .select-kit-header {
       min-height: 30px !important;
       border: 0 !important;
       border-radius: 0 !important;
@@ -585,27 +573,27 @@
       box-shadow: none !important;
     }
 
-    html.lark-doc-theme .sidebar-section-header:hover,
-    html.lark-doc-theme .sidebar-section-header.btn:hover,
-    html.lark-doc-theme .sidebar-section-header button:hover,
-    html.lark-doc-theme .sidebar-section-header .btn:hover {
+    .lark-doc-theme .sidebar-section-header:hover,
+    .lark-doc-theme .sidebar-section-header.btn:hover,
+    .lark-doc-theme .sidebar-section-header button:hover,
+    .lark-doc-theme .sidebar-section-header .btn:hover {
       border-color: transparent !important;
       background: transparent !important;
     }
 
     /* 主页：话题列表映射为云文档文件表格 */
-    html.lark-doc-theme.lark-doc-home .welcome-banner,
-    html.lark-doc-theme.lark-doc-home .welcome-banner-wrapper,
-    html.lark-doc-theme.lark-doc-home .above-main-container-outlet.welcome-link-banner-connector,
-    html.lark-doc-theme.lark-doc-home .discourse-banner {
+    .lark-doc-home .welcome-banner,
+    .lark-doc-home .welcome-banner-wrapper,
+    .lark-doc-home .above-main-container-outlet.welcome-link-banner-connector,
+    .lark-doc-home .discourse-banner {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .list-controls {
+    .lark-doc-home .list-controls {
       margin: 0 0 4px !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .navigation-container {
+    .lark-doc-home .navigation-container {
       display: flex !important;
       width: 100% !important;
       min-height: 48px !important;
@@ -615,16 +603,17 @@
       align-items: center !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .navigation-container .nav-pills {
+    .lark-doc-home .navigation-container .nav-pills {
       display: flex !important;
       flex: 0 1 auto !important;
       align-items: stretch !important;
+      min-height: 48px !important;
       margin: 0 !important;
       padding: 0 !important;
       list-style: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .navigation-container > .lark-create-topic-slot {
+    .lark-doc-home .navigation-container > .lark-create-topic-slot {
       display: flex !important;
       flex: 0 0 auto !important;
       align-items: center !important;
@@ -635,7 +624,7 @@
       list-style: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .navigation-container .lark-create-topic {
+    .lark-doc-home .navigation-container .lark-create-topic {
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -654,17 +643,17 @@
       box-shadow: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .navigation-container .lark-create-topic:hover {
+    .lark-doc-home .navigation-container .lark-create-topic:hover {
       border-color: transparent !important;
       background: var(--lark-fill-hover) !important;
       color: var(--lark-text) !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .lark-create-topic > * {
+    .lark-doc-home .lark-create-topic > * {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .lark-create-topic::before {
+    .lark-doc-home .lark-create-topic::before {
       content: "+";
       display: block;
       font-size: 21px;
@@ -672,7 +661,7 @@
       line-height: 1;
     }
 
-    html.lark-doc-theme.lark-doc-home .lark-create-topic::after {
+    .lark-doc-home .lark-create-topic::after {
       content: "新建话题";
       display: block;
       font-size: 14px;
@@ -681,14 +670,12 @@
       white-space: nowrap;
     }
 
-    html.lark-doc-theme.lark-doc-home .navigation-container .nav-pills,
-    html.lark-doc-theme.lark-doc-home .navigation-container .nav-pills > li {
+    .lark-doc-home .navigation-container .nav-pills > li {
       min-height: 48px !important;
       align-items: stretch !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .nav-pills > li > a,
-    html.lark-doc-theme.lark-doc-home .nav-pills > li > button {
+    .lark-doc-home .nav-pills > li > :is(a, button) {
       display: flex !important;
       align-items: center !important;
       min-height: 48px !important;
@@ -701,16 +688,14 @@
       font-weight: 400 !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .nav-pills > li > a.active,
-    html.lark-doc-theme.lark-doc-home .nav-pills > li.active > a,
-    html.lark-doc-theme.lark-doc-home .nav-pills > li > button.active {
+    .lark-doc-home .nav-pills > li > :is(a.active, button.active),
+    .lark-doc-home .nav-pills > li.active > a {
       position: relative;
       color: var(--lark-blue-strong) !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .nav-pills > li > a.active::after,
-    html.lark-doc-theme.lark-doc-home .nav-pills > li.active > a::after,
-    html.lark-doc-theme.lark-doc-home .nav-pills > li > button.active::after {
+    .lark-doc-home .nav-pills > li > :is(a.active, button.active)::after,
+    .lark-doc-home .nav-pills > li.active > a::after {
       content: "";
       position: absolute;
       right: 12px;
@@ -721,21 +706,21 @@
       background: var(--lark-blue);
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list {
+    .lark-doc-home .topic-list {
       width: 100% !important;
       margin-top: 0 !important;
       border-collapse: collapse !important;
       border-spacing: 0 !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-header {
+    .lark-doc-home .topic-list-header {
       height: 42px !important;
       color: var(--lark-text-3) !important;
       font-size: 13px !important;
       font-weight: 400 !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-header th {
+    .lark-doc-home .topic-list-header th {
       height: 42px !important;
       padding: 0 12px !important;
       border-bottom: 1px solid var(--lark-line) !important;
@@ -746,31 +731,29 @@
       vertical-align: middle !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-header th .lark-column-label {
+    .lark-doc-home .topic-list-header th .lark-column-label {
       color: var(--lark-text-3) !important;
       font-size: 13px !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-header th .d-icon {
+    .lark-doc-home .topic-list-header th .d-icon {
       margin-left: 4px;
       font-size: 12px !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item,
-    html.lark-doc-theme.lark-doc-home .topic-list-body .topic-list-item {
+    .lark-doc-home .topic-list-item {
       height: 64px !important;
       background: var(--lark-bg) !important;
       border: 0 !important;
       transition: background-color 120ms ease;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item:hover,
-    html.lark-doc-theme.lark-doc-home .topic-list-item.selected {
+    .lark-doc-home .topic-list-item:hover,
+    .lark-doc-home .topic-list-item.selected {
       background: var(--lark-row-hover) !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item > td,
-    html.lark-doc-theme.lark-doc-home .topic-list-body .topic-list-item > td {
+    .lark-doc-home .topic-list-item > td {
       height: 64px !important;
       padding: 8px 12px !important;
       border-bottom: 1px solid var(--lark-line-soft) !important;
@@ -779,28 +762,28 @@
       box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-body .topic-list-item > td .topic-post-badges {
+    .lark-doc-home .topic-list-body .topic-list-item > td .topic-post-badges {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item .main-link {
+    .lark-doc-home .topic-list-item .main-link {
       position: relative;
       box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item .main-link .link-top-line,
-    html.lark-doc-theme.lark-doc-home .topic-list-item .main-link .link-bottom-line {
+    .lark-doc-home .topic-list-item .main-link .link-top-line,
+    .lark-doc-home .topic-list-item .main-link .link-bottom-line {
       display: block !important;
       width: 100% !important;
       min-width: 0 !important;
       padding-left: 39px !important;
       box-sizing: border-box !important;
     }
-    html.lark-doc-theme.lark-doc-home .topic-list-item .main-link .badge-category__wrapper{
+    .lark-doc-home .topic-list-item .main-link .badge-category__wrapper{
       font-size: 12px;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item .main-link::before {
+    .lark-doc-home .topic-list-item .main-link::before {
       content: "";
       position: absolute;
       left: 12px;
@@ -817,9 +800,7 @@
       transform: translateY(-50%);
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item .title,
-    html.lark-doc-theme.lark-doc-home .topic-list-item .title a,
-    html.lark-doc-theme.lark-doc-home .topic-list-item .link-top-line a.title {
+    .lark-doc-home .topic-list-item :is(.title, .title a, .link-top-line a.title) {
       color: var(--lark-text-6) !important;
       font-size: 16px !important;
       font-weight: 400 !important;
@@ -827,24 +808,28 @@
       text-decoration: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item .title:hover,
-    html.lark-doc-theme.lark-doc-home .topic-list-item .title a:hover,
-    html.lark-doc-theme.lark-doc-home .topic-list-item .link-top-line a.title:hover {
+    .lark-doc-home .topic-list-item :is(
+      .title:hover,
+      .title a:hover,
+      .link-top-line a.title:hover
+    ) {
       color: var(--lark-blue-strong) !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item .link-bottom-line,
-    html.lark-doc-theme.lark-doc-home .topic-list-item .discourse-tags,
-    html.lark-doc-theme.lark-doc-home .topic-list-item .badge-wrapper {
+    .lark-doc-home .topic-list-item :is(
+      .link-bottom-line,
+      .discourse-tags,
+      .badge-wrapper
+    ) {
       color: var(--lark-text-3) !important;
       font-size: 12px !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item .posters > :not(.lark-owner-name) {
+    .lark-doc-home .topic-list-item .posters > :not(.lark-owner-name) {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item .posters .lark-owner-name {
+    .lark-doc-home .topic-list-item .posters .lark-owner-name {
       display: block;
       overflow: hidden;
       color: var(--lark-text-2) !important;
@@ -854,20 +839,18 @@
       white-space: nowrap;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list-item .posts,
-    html.lark-doc-theme.lark-doc-home .topic-list-item .views,
-    html.lark-doc-theme.lark-doc-home .topic-list-item .activity {
+    .lark-doc-home .topic-list-item :is(.posts, .views, .activity) {
       color: var(--lark-text-2) !important;
       font-size: 13px !important;
       font-weight: 400 !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .topic-list .num a {
+    .lark-doc-home .topic-list .num a {
       color: inherit !important;
       font-weight: 400 !important;
     }
 
-    html.lark-doc-theme.lark-doc-home .show-more.has-topics .alert {
+    .lark-doc-home .show-more.has-topics .alert {
       width: max-content !important;
       margin: 10px auto !important;
       padding: 7px 16px !important;
@@ -878,30 +861,30 @@
     }
 
     /* 话题页：主帖是文档正文，回复是连续批注段落 */
-    html.lark-doc-theme.lark-doc-topic #main-outlet {
+    .lark-doc-topic #main-outlet {
       padding-top: 80px !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic #topic-title,
-    html.lark-doc-theme.lark-doc-topic .container.posts,
-    html.lark-doc-theme.lark-doc-topic .topic-above-post-stream-outlet {
+    .lark-doc-topic #topic-title,
+    .lark-doc-topic .container.posts,
+    .lark-doc-topic .topic-above-post-stream-outlet {
       width: 100% !important;
       max-width: 980px !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic #topic-title {
+    .lark-doc-topic #topic-title {
       margin: 24px auto 0 !important;
       padding: 0 48px !important;
       box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic #topic-title .title-wrapper {
+    .lark-doc-topic #topic-title .title-wrapper {
       width: 100% !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic #topic-title h1,
-    html.lark-doc-theme.lark-doc-topic #topic-title .fancy-title,
-    html.lark-doc-theme.lark-doc-topic #topic-title .fancy-title a {
+    .lark-doc-topic #topic-title h1,
+    .lark-doc-topic #topic-title .fancy-title,
+    .lark-doc-topic #topic-title .fancy-title a {
       margin: 0 !important;
       color: var(--lark-text) !important;
       font-size: clamp(28px, 2.2vw, 38px) !important;
@@ -911,11 +894,11 @@
       text-decoration: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic #topic-title .topic-category {
+    .lark-doc-topic #topic-title .topic-category {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .lark-doc-author {
+    .lark-doc-topic .lark-doc-author {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -925,7 +908,7 @@
       font-size: 13px !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .lark-doc-author-avatar {
+    .lark-doc-topic .lark-doc-author-avatar {
       display: block;
       flex: 0 0 auto;
       width: 24px;
@@ -934,7 +917,7 @@
       object-fit: cover;
     }
 
-    html.lark-doc-theme.lark-doc-topic .lark-doc-author-name {
+    .lark-doc-topic .lark-doc-author-name {
       overflow: hidden;
       max-width: 240px;
       color: var(--lark-text-2) !important;
@@ -944,40 +927,33 @@
       text-decoration: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .lark-doc-author-separator {
-      width: 1px;
-      height: 14px;
-      margin: 0 8px;
-      background: var(--lark-line);
-    }
-
-    html.lark-doc-theme.lark-doc-topic .container.posts {
+    .lark-doc-topic .container.posts {
       display: block !important;
       margin: 0 auto !important;
       padding: 0 48px 72px !important;
       box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .container.posts > .row,
-    html.lark-doc-theme.lark-doc-topic .topic-area,
-    html.lark-doc-theme.lark-doc-topic .posts-wrapper {
+    .lark-doc-topic .container.posts > .row,
+    .lark-doc-topic .topic-area,
+    .lark-doc-topic .posts-wrapper {
       width: 100% !important;
       max-width: none !important;
       margin: 0 !important;
       padding: 0 !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .post-stream {
+    .lark-doc-topic .post-stream {
       width: 100% !important;
       min-width: 0 !important;
     }
 
     /* 原生楼层时间线收进右下角的文档工具面板 */
-    html.lark-doc-theme.lark-doc-topic .topic-navigation {
+    .lark-doc-topic .topic-navigation {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .topic-navigation {
+    .lark-doc-topic.lark-topic-tools-open .topic-navigation {
       position: fixed !important;
       z-index: 1080 !important;
       top: auto !important;
@@ -1009,8 +985,8 @@
       }
     }
 
-    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .timeline-container,
-    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .topic-timeline {
+    .lark-doc-topic.lark-topic-tools-open .timeline-container,
+    .lark-doc-topic.lark-topic-tools-open .topic-timeline {
       position: static !important;
       inset: auto !important;
       display: block !important;
@@ -1023,11 +999,11 @@
       box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .timeline-controls {
+    .lark-doc-topic.lark-topic-tools-open .timeline-controls {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .timeline-scrollarea-wrapper {
+    .lark-doc-topic.lark-topic-tools-open .timeline-scrollarea-wrapper {
       position: relative !important;
       inset: auto !important;
       width: 100% !important;
@@ -1036,7 +1012,7 @@
       box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .timeline-footer-controls {
+    .lark-doc-topic.lark-topic-tools-open .timeline-footer-controls {
       position: static !important;
       inset: auto !important;
       display: flex !important;
@@ -1052,10 +1028,10 @@
       box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open
+    .lark-doc-topic.lark-topic-tools-open
       .timeline-footer-controls
       > *,
-    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open
+    .lark-doc-topic.lark-topic-tools-open
       .timeline-footer-controls
       .topic-notifications-button {
       position: static !important;
@@ -1064,10 +1040,9 @@
       transform: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .lark-topic-tools-toggle {
+    .lark-doc-topic .lark-floating-toggle {
       position: fixed;
       z-index: 1081;
-      right: 24px;
       bottom: 24px;
       display: inline-flex;
       align-items: center;
@@ -1083,27 +1058,44 @@
       cursor: pointer;
     }
 
-    html.lark-doc-theme.lark-doc-topic .lark-topic-tools-toggle:hover,
-    html.lark-doc-theme.lark-doc-topic .lark-topic-tools-toggle:focus-visible,
-    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .lark-topic-tools-toggle {
+    .lark-doc-topic .lark-floating-toggle:hover,
+    .lark-doc-topic .lark-floating-toggle:focus-visible,
+    .lark-doc-topic.lark-topic-tools-open .lark-topic-tools-toggle {
       border-color: var(--lark-blue-soft) !important;
       color: var(--lark-blue-strong) !important;
       background: var(--lark-highlight) !important;
       outline: none;
     }
 
-    html.lark-doc-theme.lark-doc-topic .lark-topic-tools-toggle svg {
+    .lark-doc-topic .lark-floating-toggle svg {
       width: 18px;
       height: 18px;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post {
+    .lark-doc-topic .lark-topic-tools-toggle {
+      right: 24px;
+    }
+
+    .lark-doc-topic .lark-back-toggle {
+      right: 76px;
+    }
+
+    .lark-doc-topic .lark-post-style-toggle {
+      left: calc(var(--lark-sidebar) + 24px);
+    }
+
+    body.lark-doc-topic:not(.has-sidebar-page) .lark-post-style-toggle {
+      left: 24px;
+    }
+
+    /* lark-post-row-styles:start */
+
+    .lark-doc-topic .topic-post {
       width: 100% !important;
       margin: 0 !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post > article,
-    html.lark-doc-theme.lark-doc-topic .topic-post > article.boxed {
+    .lark-doc-topic .topic-post > article {
       width: 100% !important;
       margin: 0 !important;
       border: 0 !important;
@@ -1112,24 +1104,24 @@
       box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post:not([data-post-number="1"]) > article {
+    .lark-doc-topic .topic-post:not([data-post-number="1"]) > article {
       border-top: 1px solid var(--lark-line) !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post > article > .post__row {
+    .lark-doc-topic .topic-post > article > .post__row {
       display: block !important;
       width: 100% !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post > article > .post__row > .topic-avatar,
-    html.lark-doc-theme.lark-doc-topic .topic-post img.avatar,
-    html.lark-doc-theme.lark-doc-topic .topic-post .small-user-list,
-    html.lark-doc-theme.lark-doc-topic .post__topic-map,
-    html.lark-doc-theme.lark-doc-topic .topic-map {
+    .lark-doc-topic .topic-post > article > .post__row > .topic-avatar,
+    .lark-doc-topic .topic-post img.avatar,
+    .lark-doc-topic .topic-post .small-user-list,
+    .lark-doc-topic .post__topic-map,
+    .lark-doc-topic .topic-map {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post > article > .post__row > .topic-body {
+    .lark-doc-topic .post__body.topic-body {
       position: relative !important;
       float: none !important;
       width: 100% !important;
@@ -1142,20 +1134,16 @@
       box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post[data-post-number="1"]
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .topic-meta-data {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post:not([data-post-number="1"])
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .topic-meta-data {
       display: flex !important;
       align-items: center !important;
@@ -1165,11 +1153,15 @@
       border-left: 2px solid var(--lark-line-strong) !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
+      .topic-post.topic-owner:not([data-post-number="1"]) .post__body.topic-body
+      > .topic-meta-data {
+      border-left-color: #f59e0b !important;
+    }
+
+    .lark-doc-topic
       .topic-post
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .topic-meta-data
       > .names {
       display: flex !important;
@@ -1179,29 +1171,29 @@
       color: var(--lark-text-2) !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post
       .names
-      > :not(.username):not(.full-name):not(.lark-topic-owner-label) {
+      > :not(.username):not(.full-name):not(.lark-post-inline-meta) {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .names .full-name {
+    .lark-doc-topic .topic-post .names .full-name {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .names.lark-has-full-name .username {
+    .lark-doc-topic .topic-post .names.lark-has-full-name .username {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .names.lark-has-full-name .full-name {
+    .lark-doc-topic .topic-post .names.lark-has-full-name .full-name {
       display: inline !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .names .username,
-    html.lark-doc-theme.lark-doc-topic .topic-post .names .username a,
-    html.lark-doc-theme.lark-doc-topic .topic-post .names .full-name,
-    html.lark-doc-theme.lark-doc-topic .topic-post .names .full-name a {
+    .lark-doc-topic
+      .topic-post
+      .names
+      :is(.username, .username a, .full-name, .full-name a) {
       color: var(--lark-text-2) !important;
       font-size: 14px !important;
       font-weight: 500 !important;
@@ -1209,31 +1201,73 @@
       text-decoration: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .names .lark-topic-owner-label {
-      display: none !important;
-      flex: 0 0 auto;
-      margin-left: 4px;
-      color: var(--lark-text-3);
-      font-size: 12px;
-      font-weight: 400;
+    .lark-doc-theme .lark-post-inline-meta,
+    .lark-doc-theme .lark-doc-author-time {
+      display: inline-flex !important;
+      align-items: center;
+      min-width: 0;
+      color: var(--lark-text-3) !important;
+      font-size: 12px !important;
+      font-weight: 400 !important;
+      line-height: 22px !important;
+      white-space: nowrap;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-theme .lark-post-inline-meta-item {
+      display: inline-flex !important;
+      align-items: center;
+      min-width: 0;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      color: inherit !important;
+      background: transparent !important;
+      font-family: inherit !important;
+      font-size: 12px !important;
+      font-weight: 400 !important;
+      line-height: 22px !important;
+      text-decoration: none !important;
+      box-shadow: none !important;
+    }
+
+    .lark-doc-theme button.lark-post-inline-meta-item {
+      cursor: pointer;
+    }
+
+    .lark-doc-theme .lark-post-inline-meta-item::before {
+      flex: 0 0 auto;
+      margin: 0 6px;
+      color: var(--lark-line-strong);
+      content: "|";
+    }
+
+    .lark-doc-theme button.lark-post-inline-meta-item:hover,
+    .lark-doc-theme button.lark-post-inline-meta-item:focus-visible {
+      color: var(--lark-text-2) !important;
+      outline: none;
+    }
+
+    .lark-doc-topic
+      .post__body.topic-body
+      > .topic-meta-data
+      > .post-infos
+      > .reply-to-tab {
+      display: none !important;
+    }
+
+    .lark-doc-topic
       div.topic-owner
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .contents
       > .cooked::after {
       display: none !important;
       content: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .topic-meta-data
       > .post-infos {
       margin-left: auto !important;
@@ -1242,54 +1276,36 @@
       transition: opacity 120ms ease;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .topic-meta-data
       > .post-infos,
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .topic-meta-data
       > .post-infos
-      a,
-    html.lark-doc-theme.lark-doc-topic
-      .topic-post
-      > article
-      > .post__row
-      > .topic-body
-      > .topic-meta-data
-      > .post-infos
-      button {
+      :is(a, button) {
       color: var(--lark-text-3) !important;
       font-size: 12px !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .post__contents {
       position: relative !important;
       overflow: visible !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .post__contents,
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .post__contents
       > .cooked {
       width: 100% !important;
@@ -1301,33 +1317,27 @@
       line-height: 1.8 !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post[data-post-number="1"]
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .post__contents
       > .cooked {
       font-size: 17px !important;
       line-height: 1.85 !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .post__contents
       > .cooked
       > :first-child {
       margin-top: 0 !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .post__contents
       > .post__menu-area {
       position: absolute !important;
@@ -1346,35 +1356,27 @@
       transition: opacity 120ms ease;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post[data-post-number="1"]
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .post__contents
       > .post__menu-area {
       top: auto !important;
       bottom: -17px !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post:hover > article > .post__row > .topic-body > .post__contents > .post__menu-area,
-    html.lark-doc-theme.lark-doc-topic .topic-post:focus-within > article > .post__row > .topic-body > .post__contents > .post__menu-area,
-    html.lark-doc-theme.lark-doc-topic .topic-post:hover > article > .post__row > .topic-body > .topic-meta-data > .post-infos,
-    html.lark-doc-theme.lark-doc-topic .topic-post:focus-within > article > .post__row > .topic-body > .topic-meta-data > .post-infos {
+    .lark-doc-topic
+      .topic-post:is(:hover, :focus-within)
+      .post__body.topic-body
+      > :is(.post__contents, .topic-meta-data)
+      > :is(.post__menu-area, .post-infos) {
       opacity: 1;
       pointer-events: auto;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post:hover .lark-topic-owner-label,
-    html.lark-doc-theme.lark-doc-topic .topic-post:focus-within .lark-topic-owner-label {
-      display: inline !important;
-    }
-
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .post__contents
       > .post__menu-area
       .post-controls {
@@ -1383,11 +1385,9 @@
       border: 0 !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .post__contents
       > .post__menu-area
       .post-controls
@@ -1399,30 +1399,19 @@
       background: transparent !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic
+    .lark-doc-topic
       .topic-post
-      > article
-      > .post__row
-      > .topic-body
+      .post__body.topic-body
       > .post__contents
       > .post__menu-area
       .post-controls
-      .btn:hover,
-    html.lark-doc-theme.lark-doc-topic
-      .topic-post
-      > article
-      > .post__row
-      > .topic-body
-      > .post__contents
-      > .post__menu-area
-      .post-controls
-      .btn:focus-visible {
+      .btn:is(:hover, :focus-visible) {
       color: var(--lark-text-2) !important;
       background: var(--lark-fill-hover) !important;
     }
 
     /* 加载父帖时使用独立的紧凑引用块，避免继承普通回复布局造成按钮错位 */
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts {
+    .lark-doc-topic .topic-post .embedded-posts {
       display: block !important;
       position: relative !important;
       inset: auto !important;
@@ -1438,7 +1427,7 @@
       box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .reply {
+    .lark-doc-topic .topic-post .embedded-posts .reply {
       display: block !important;
       float: none !important;
       clear: both !important;
@@ -1447,25 +1436,25 @@
       padding: 0 !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .reply + .reply {
+    .lark-doc-topic .topic-post .embedded-posts .reply + .reply {
       border-top: 1px solid var(--lark-line-soft) !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .embedded-posts.bottom > div .row::before {
+    .lark-doc-topic .embedded-posts.bottom > div .row::before {
       display: none !important;
       content: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .row {
+    .lark-doc-topic .topic-post .embedded-posts .row {
       display: block !important;
       width: 100% !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .topic-avatar {
+    .lark-doc-topic .topic-post .embedded-posts .topic-avatar {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .topic-body {
+    .lark-doc-topic .topic-post .embedded-posts .topic-body {
       float: none !important;
       width: 100% !important;
       max-width: none !important;
@@ -1477,7 +1466,7 @@
       box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .topic-meta-data {
+    .lark-doc-topic .topic-post .embedded-posts .topic-meta-data {
       display: flex !important;
       align-items: center !important;
       min-height: 22px !important;
@@ -1486,39 +1475,42 @@
       border: 0 !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .post-infos {
+    .lark-doc-topic .topic-post .embedded-posts .post-infos {
       opacity: 0 !important;
       pointer-events: none !important;
       transition: opacity 120ms ease;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .post-link-arrow {
+    .lark-doc-topic .topic-post .embedded-posts .post-link-arrow {
       opacity: 0;
       pointer-events: none;
       transition: opacity 120ms ease;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .reply:hover .post-infos,
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .reply:focus-within .post-infos,
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .reply:hover .post-link-arrow,
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .reply:focus-within .post-link-arrow {
+    .lark-doc-topic
+      .topic-post
+      .embedded-posts
+      .reply:is(:hover, :focus-within)
+      :is(.post-infos, .post-link-arrow) {
       opacity: 1 !important;
       pointer-events: auto !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .post__menu-area {
+    .lark-doc-topic .topic-post .embedded-posts .post__menu-area {
       display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .cooked {
+    .lark-doc-topic .topic-post .embedded-posts .cooked {
       width: 100% !important;
       margin: 0 !important;
       font-size: 14px !important;
       line-height: 1.7 !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .collapse-up,
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .collapse-down {
+    .lark-doc-topic
+      .topic-post
+      .embedded-posts
+      :is(.collapse-up, .collapse-down) {
       position: absolute !important;
       z-index: 2 !important;
       top: 8px !important;
@@ -1538,28 +1530,52 @@
       box-shadow: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .collapse-up:hover,
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .collapse-down:hover {
+    .lark-doc-topic .lark-inline-boosts {
+      position: static !important;
+      display: block !important;
+      width: 100%;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+
+    .lark-doc-topic
+      .topic-post
+      .post__body.topic-body
+      > .post__contents
+      > .post__menu-area
+      > .discourse-boosts__post-menu {
+      display: none !important;
+    }
+
+    .lark-doc-topic
+      .topic-post
+      .embedded-posts
+      :is(.collapse-up, .collapse-down):hover {
       background: var(--lark-fill-hover) !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .collapse-up .d-icon,
-    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .collapse-down .d-icon {
+    .lark-doc-topic
+      .topic-post
+      .embedded-posts
+      :is(.collapse-up, .collapse-down)
+      .d-icon {
       width: 12px !important;
       height: 12px !important;
     }
 
+    /* lark-post-row-styles:end */
+
     /* 回复编辑器改成评论输入区域 */
-    html.lark-doc-theme .d-editor-container,
-    html.lark-doc-theme .composer-popup,
-    html.lark-doc-theme #reply-control {
+    .lark-doc-theme .d-editor-container,
+    .lark-doc-theme .composer-popup,
+    .lark-doc-theme #reply-control {
       border-color: var(--lark-line) !important;
       background: var(--lark-bg) !important;
       box-shadow: 0 -4px 20px var(--lark-shadow-2) !important;
     }
 
-    html.lark-doc-theme .d-editor-textarea-wrapper,
-    html.lark-doc-theme .d-editor-input {
+    .lark-doc-theme .d-editor-textarea-wrapper,
+    .lark-doc-theme .d-editor-input {
       border-color: var(--lark-line-strong) !important;
       border-radius: 8px !important;
       background: var(--lark-bg) !important;
@@ -1567,64 +1583,64 @@
       box-shadow: none !important;
     }
 
-    html.lark-doc-theme .d-editor-textarea-wrapper:focus-within {
+    .lark-doc-theme .d-editor-textarea-wrapper:focus-within {
       border-color: var(--lark-blue-soft) !important;
       box-shadow: 0 0 0 2px var(--lark-focus-ring) !important;
     }
 
-    html.lark-doc-theme .d-editor-button-bar {
+    .lark-doc-theme .d-editor-button-bar {
       border-color: var(--lark-line-soft) !important;
       background: var(--lark-fill-2) !important;
     }
 
-    html.lark-doc-theme .d-editor-button-bar .btn {
+    .lark-doc-theme .d-editor-button-bar .btn {
       border: 0 !important;
       background: transparent !important;
     }
 
-    html.lark-doc-theme .menu-panel,
-    html.lark-doc-theme .select-kit-body,
-    html.lark-doc-theme .dropdown-menu {
+    .lark-doc-theme .menu-panel,
+    .lark-doc-theme .select-kit-body,
+    .lark-doc-theme .dropdown-menu {
       border: 1px solid var(--lark-line) !important;
       border-radius: 8px !important;
       background: var(--lark-bg) !important;
       box-shadow: 0 8px 24px var(--lark-shadow-3) !important;
     }
 
-    html.lark-doc-theme .select-kit-row:hover,
-    html.lark-doc-theme .select-kit-row.is-highlighted,
-    html.lark-doc-theme .menu-panel li:hover {
+    .lark-doc-theme .select-kit-row:hover,
+    .lark-doc-theme .select-kit-row.is-highlighted,
+    .lark-doc-theme .menu-panel li:hover {
       background: var(--lark-row-hover) !important;
     }
 
     /* 窄屏只保证可用，不另做移动端仿制 */
     @media (max-width: 1100px) {
-      html.lark-doc-theme .lark-topic-context {
+      .lark-doc-theme .lark-topic-context {
         left: calc(var(--lark-sidebar) + 12px);
         right: 220px;
       }
 
-      html.lark-doc-theme .lark-home-heading {
+      .lark-doc-theme .lark-home-heading {
         left: calc(var(--lark-sidebar) + 12px);
         right: 220px;
       }
 
-      html.lark-doc-theme.lark-doc-topic #topic-title,
-      html.lark-doc-theme.lark-doc-topic .container.posts {
+      .lark-doc-topic #topic-title,
+      .lark-doc-topic .container.posts {
         padding-right: 28px !important;
         padding-left: 28px !important;
       }
     }
 
     @media (hover: none) {
-      html.lark-doc-theme.lark-doc-topic
+      .lark-doc-topic.lark-post-rows-themed
         .topic-post
         > article
         > .post__row
         > .topic-body
         > .post__contents
         > .post__menu-area,
-      html.lark-doc-theme.lark-doc-topic
+      .lark-doc-topic.lark-post-rows-themed
         .topic-post
         > article
         > .post__row
@@ -1635,16 +1651,21 @@
         pointer-events: auto;
       }
 
-      html.lark-doc-theme.lark-doc-topic .topic-post .lark-topic-owner-label {
-        display: inline !important;
-      }
-
-      html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .post-link-arrow {
+      .lark-doc-topic.lark-post-rows-themed .topic-post .embedded-posts .post-link-arrow {
         opacity: 1;
         pointer-events: auto;
       }
     }
   `;
+
+  const CSS = RAW_CSS.replace(
+    /(\/\* lark-post-row-styles:start \*\/)([\s\S]*?)(\/\* lark-post-row-styles:end \*\/)/,
+    (_, start, rules, end) =>
+      `${start}${rules.replaceAll(
+        ".lark-doc-topic",
+        `.lark-doc-topic.${POST_ROWS_THEME_CLASS}`
+      )}${end}`
+  );
 
   function injectStyle() {
     if (document.getElementById(STYLE_ID)) return;
@@ -1887,57 +1908,228 @@
     return "已修改";
   }
 
-  function markTopicAuthorNames() {
-    const currentTopicKey = getTopicKey();
-    const detectedOwnerUsername = document
-      .querySelector(
-        ".topic-post.topic-owner > article > .post__row > .topic-body > .topic-meta-data .names :is(.full-name, .username) a[data-user-card]"
-      )
-      ?.getAttribute("data-user-card")
-      ?.trim()
-      .toLowerCase();
+  function getPostBody(post) {
+    return post?.querySelector(
+      ":scope > article > .post__row > .post__body.topic-body"
+    );
+  }
 
-    if (detectedOwnerUsername) {
-      topicOwnerKey = currentTopicKey;
-      topicOwnerUsername = detectedOwnerUsername;
-    } else if (topicOwnerKey !== currentTopicKey) {
-      topicOwnerKey = currentTopicKey;
-      topicOwnerUsername = "";
-    }
-
+  function markTopicFullNames(enabled = true) {
     for (const names of document.querySelectorAll(".topic-post .names")) {
       const fullNameNode = names.querySelector(":scope > .full-name");
-      const usernameNode = names.querySelector(":scope > .username");
       const fullName = fullNameNode?.textContent?.trim();
-      const username = names
-        .querySelector(":scope > :is(.full-name, .username) a[data-user-card]")
-        ?.getAttribute("data-user-card")
-        ?.trim()
-        .toLowerCase();
-      const owningPost = names.closest(".topic-post");
-      const isEmbeddedName = Boolean(names.closest(".embedded-posts"));
-      const isTopicOwner =
-        (!isEmbeddedName && owningPost?.classList.contains("topic-owner")) ||
-        Boolean(topicOwnerUsername && username === topicOwnerUsername);
-      names.classList.toggle("lark-has-full-name", Boolean(fullName));
-      names.classList.toggle("lark-topic-owner-name", isTopicOwner);
+      names.classList.toggle("lark-has-full-name", enabled && Boolean(fullName));
+    }
+  }
 
-      let ownerLabel = names.querySelector(":scope > .lark-topic-owner-label");
-      if (!isTopicOwner) {
-        ownerLabel?.remove();
+  function getPostInlineMetadata(post) {
+    const postBody = getPostBody(post);
+    const postInfos = postBody?.querySelector(
+      ":scope > .topic-meta-data > .post-infos"
+    );
+    const menuArea = postBody?.querySelector(
+      ":scope > .post__contents > .post__menu-area"
+    );
+    const parentPost = postInfos?.querySelector(":scope > .reply-to-tab");
+    const parentName = parentPost
+      ?.querySelector(":scope > span")
+      ?.textContent?.trim()
+      .replace(/\s+/g, " ");
+    const reactions = menuArea?.querySelector(
+      ".reactions-actions-summary .discourse-reactions-counter"
+    );
+    const reactionCount = reactions
+      ?.querySelector(".reactions-counter")
+      ?.textContent?.trim()
+      .replace(/\s+/g, " ");
+    const replies = menuArea?.querySelector(
+      ".post-action-menu__show-replies.show-replies"
+    );
+    const replyCount = replies
+      ?.querySelector(".d-button-label")
+      ?.textContent?.trim()
+      .replace(/\s+/g, " ");
+    const items = [];
+
+    if (reactions && reactionCount) {
+      items.push({
+        kind: "reactions",
+        label: `♥ ${reactionCount}`,
+        source: reactions
+      });
+    }
+    if (replies && replyCount) {
+      items.push({
+        kind: "replies",
+        label: replyCount,
+        source: replies
+      });
+    }
+    if (parentPost && parentName) {
+      items.push({
+        kind: "parent",
+        label: `↩ ${parentName}`,
+        source: parentPost
+      });
+    }
+
+    return items;
+  }
+
+  function renderPostInlineMetadata(host, anchor, items) {
+    let metadata = host?.querySelector(":scope > .lark-post-inline-meta");
+    if (!host || !anchor || items.length === 0) {
+      metadata?.remove();
+      return;
+    }
+
+    const signature = items
+      .map(({ kind, label, source }) =>
+        [kind, label, source.getAttribute("aria-expanded") || ""].join(":")
+      )
+      .join("|");
+    const sameSources =
+      metadata?._larkMetaSources?.length === items.length &&
+      items.every(({ source }, index) => metadata._larkMetaSources[index] === source);
+    if (
+      metadata?.dataset.signature === signature &&
+      sameSources &&
+      anchor.nextElementSibling === metadata
+    ) {
+      return;
+    }
+
+    metadata?.remove();
+    metadata = document.createElement("span");
+    metadata.className = "lark-post-inline-meta";
+    metadata.dataset.signature = signature;
+    metadata._larkMetaSources = items.map(({ source }) => source);
+
+    for (const { kind, label, source } of items) {
+      const item = document.createElement("button");
+      item.className = `lark-post-inline-meta-item lark-post-inline-meta-${kind}`;
+      item.type = "button";
+      item.textContent = label;
+      item.title = source.title || source.getAttribute("aria-label") || label;
+      item.setAttribute("aria-label", item.title);
+      const expanded = source.getAttribute("aria-expanded");
+      if (expanded !== null) item.setAttribute("aria-expanded", expanded);
+      item.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        source.click();
+      });
+      metadata.appendChild(item);
+    }
+
+    anchor.after(metadata);
+  }
+
+  function syncPostInlineMetadata(includePostRows = true) {
+    for (const post of document.querySelectorAll(".topic-post[data-post-number]")) {
+      if (post.dataset.postNumber === "1") continue;
+      const names = getPostBody(post)?.querySelector(
+        ":scope > .topic-meta-data > .names"
+      );
+      if (!includePostRows) {
+        names?.querySelector(":scope > .lark-post-inline-meta")?.remove();
+        continue;
+      }
+      const displayName = names?.classList.contains("lark-has-full-name")
+        ? names.querySelector(":scope > .full-name")
+        : names?.querySelector(":scope > .username");
+      renderPostInlineMetadata(
+        names,
+        displayName,
+        getPostInlineMetadata(post)
+      );
+    }
+
+    const firstPost = document.querySelector('.topic-post[data-post-number="1"]');
+    const author = document.querySelector(".lark-doc-author");
+    const authorName = author?.querySelector(":scope > .lark-doc-author-name");
+    if (firstPost) {
+      renderPostInlineMetadata(author, authorName, getPostInlineMetadata(firstPost));
+    } else {
+      author?.querySelector(":scope > .lark-post-inline-meta")?.remove();
+    }
+  }
+
+  function syncBoostLists(enabled = true) {
+    for (const post of document.querySelectorAll(".topic-post[data-post-number]")) {
+      const contents = getPostBody(post)?.querySelector(":scope > .post__contents");
+      if (!enabled) {
+        contents
+          ?.querySelector(":scope > :is(.lark-inline-boosts, .lark-boost-table)")
+          ?.remove();
+        continue;
+      }
+      const cooked = contents?.querySelector(":scope > .cooked");
+      const bubbles = contents
+        ? Array.from(
+          contents.querySelectorAll(
+            ":scope > .post__menu-area > .discourse-boosts__post-menu .discourse-boosts__bubble"
+          )
+        )
+        : [];
+      const sources = bubbles
+        .map((bubble) => {
+          const button = bubble.querySelector(":scope > .discourse-boosts__cooked");
+          const html = bubble.innerHTML?.trim() || "";
+          return button && html ? { bubble, button, html } : null;
+        })
+        .filter(Boolean);
+      let boostList = contents?.querySelector(
+        ":scope > :is(.lark-inline-boosts, .lark-boost-table)"
+      );
+
+      if (!contents || !cooked || sources.length === 0) {
+        boostList?.remove();
         continue;
       }
 
-      if (!ownerLabel) {
-        ownerLabel = document.createElement("span");
-        ownerLabel.className = "lark-topic-owner-label";
-        ownerLabel.textContent = "[话题所有者]";
+      const signature = sources.map(({ html }) => html).join("\u001e");
+      const sameSources =
+        boostList?._larkBoostSources?.length === sources.length &&
+        sources.every(
+          ({ button }, index) => boostList._larkBoostSources[index] === button
+        );
+      if (
+        boostList?.classList.contains("lark-inline-boosts") &&
+        boostList.dataset.signature === signature &&
+        sameSources &&
+        boostList.previousElementSibling === cooked
+      ) {
+        continue;
       }
 
-      const displayNameNode = fullName ? fullNameNode : usernameNode;
-      if (displayNameNode && ownerLabel.previousElementSibling !== displayNameNode) {
-        displayNameNode.after(ownerLabel);
+      boostList?.remove();
+      boostList = document.createElement("div");
+      boostList.className = "discourse-boosts__post-menu lark-inline-boosts";
+      boostList.setAttribute("aria-label", "Boost");
+      boostList.dataset.signature = signature;
+      boostList._larkBoostSources = sources.map(({ button }) => button);
+
+      const boosts = document.createElement("div");
+      boosts.className = "discourse-boosts";
+      const list = document.createElement("div");
+      list.className = "discourse-boosts__list";
+
+      for (const { bubble, button: sourceButton } of sources) {
+        const clone = bubble.cloneNode(true);
+        for (const node of clone.querySelectorAll("[id]")) node.removeAttribute("id");
+        const cloneButton = clone.querySelector(":scope > .discourse-boosts__cooked");
+        cloneButton?.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          sourceButton.click();
+        });
+        list.appendChild(clone);
       }
+
+      boosts.appendChild(list);
+      boostList.appendChild(boosts);
+      cooked.after(boostList);
     }
   }
 
@@ -1945,29 +2137,30 @@
     const titleWrapper = document.querySelector("#topic-title .title-wrapper");
     const heading = titleWrapper?.querySelector(":scope > h1");
     const firstPost = document.querySelector('.topic-post[data-post-number="1"]');
+    const firstPostBody = getPostBody(firstPost);
     const topicKey = getTopicKey();
     const existing = document.querySelector(".lark-doc-author");
 
-    if (!titleWrapper || !heading || !firstPost) {
+    if (!titleWrapper || !heading || !firstPostBody) {
       if (existing && existing.dataset.topicKey !== topicKey) existing.remove();
       return;
     }
 
-    const sourceUser = firstPost.querySelector(
-      ":scope > article > .post__row > .topic-body > .topic-meta-data .names :is(.full-name, .username) a[data-user-card], :scope > article > .post__row > .topic-body > .topic-meta-data .names :is(.full-name, .username) a"
+    const sourceUser = firstPostBody.querySelector(
+      ":scope > .topic-meta-data .names :is(.full-name, .username) a[data-user-card], :scope > .topic-meta-data .names :is(.full-name, .username) a"
     );
-    const sourceFullName = firstPost
+    const sourceFullName = firstPostBody
       .querySelector(
-        ":scope > article > .post__row > .topic-body > .topic-meta-data .names .full-name"
+        ":scope > .topic-meta-data .names .full-name"
       )
       ?.textContent?.trim()
       .replace(/\s+/g, " ");
     const sourceAvatar = firstPost.querySelector(
       ":scope > article > .post__row > .topic-avatar .main-avatar img.avatar"
     );
-    const sourceUsername = firstPost
+    const sourceUsername = firstPostBody
       .querySelector(
-        ":scope > article > .post__row > .topic-body > .topic-meta-data .names .username"
+        ":scope > .topic-meta-data .names .username"
       )
       ?.textContent?.trim()
       .replace(/\s+/g, " ");
@@ -1975,16 +2168,16 @@
       sourceFullName || sourceUsername || sourceUser?.textContent?.trim().replace(/\s+/g, " ");
     if (!sourceUser || !displayName) return;
 
-    const postDate = firstPost.querySelector(
-      ":scope > article > .post__row > .topic-body > .topic-meta-data .post-info.post-date a.post-date"
+    const postDate = firstPostBody.querySelector(
+      ":scope > .topic-meta-data .post-info.post-date a.post-date"
     );
     const relativeDate =
       postDate?.getAttribute("aria-label") ||
       postDate?.textContent?.trim().replace(/\s+/g, " ") ||
       "";
     const editTitle =
-      firstPost.querySelector(
-        ":scope > article > .post__row > .topic-body > .topic-meta-data .post-info.edits button"
+      firstPostBody.querySelector(
+        ":scope > .topic-meta-data .post-info.edits button"
       )?.title || "";
     const timeLabel = editTitle
       ? getEditLabel(editTitle)
@@ -2037,18 +2230,77 @@
     author.appendChild(name);
 
     if (timeLabel) {
-      const separator = document.createElement("span");
-      separator.className = "lark-doc-author-separator";
-      separator.setAttribute("aria-hidden", "true");
-
       const time = document.createElement("span");
-      time.className = "lark-doc-author-time";
+      time.className = "lark-post-inline-meta-item lark-doc-author-time";
       time.textContent = timeLabel;
       time.title = editTitle || postDate?.title || relativeDate;
-      author.append(separator, time);
+      author.appendChild(time);
     }
 
     heading.after(author);
+  }
+
+  function getPostRowsMode() {
+    try {
+      return localStorage.getItem(POST_ROWS_MODE_KEY) === "native"
+        ? "native"
+        : "document";
+    } catch {
+      return postRowsModeFallback;
+    }
+  }
+
+  function setPostRowsMode(mode) {
+    postRowsModeFallback = mode;
+    try {
+      localStorage.setItem(POST_ROWS_MODE_KEY, mode);
+    } catch { }
+  }
+
+  function makePostStyleToggle(postRowsThemed) {
+    let button = document.querySelector(".lark-post-style-toggle");
+    if (!document.body) return;
+
+    if (!button) {
+      button = document.createElement("button");
+      button.className = "lark-floating-toggle lark-post-style-toggle";
+      button.type = "button";
+      button.addEventListener("click", () => {
+        const enableDocumentRows = button.dataset.mode === "native";
+        setPostRowsMode(enableDocumentRows ? "document" : "native");
+        scheduleApply();
+      });
+      document.body.appendChild(button);
+    }
+
+    const mode = postRowsThemed ? "document" : "native";
+    if (button.dataset.mode === mode) return;
+
+    const label = postRowsThemed
+      ? "切换到原始帖子样式"
+      : "切换到文档帖子样式";
+    button.dataset.mode = mode;
+    button.setAttribute("aria-label", label);
+    button.setAttribute("aria-pressed", String(postRowsThemed));
+    button.title = label;
+    button.innerHTML = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 7h13m0 0-3-3m3 3-3 3M19 17H6m0 0 3 3m-3-3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+  }
+
+  function makeBackButton() {
+    if (!document.body || document.querySelector(".lark-back-toggle")) return;
+
+    const button = document.createElement("button");
+    button.className = "lark-floating-toggle lark-back-toggle";
+    button.type = "button";
+    button.setAttribute("aria-label", "返回上一页");
+    button.title = "返回上一页";
+    button.innerHTML = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="m15 6-6 6 6 6M9 12h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+    button.addEventListener("click", () => history.back());
+    document.body.appendChild(button);
   }
 
   function setTopicToolsOpen(button, isOpen) {
@@ -2109,7 +2361,7 @@
     const topicKey = getTopicKey();
     if (!button) {
       button = document.createElement("button");
-      button.className = "lark-topic-tools-toggle";
+      button.className = "lark-floating-toggle lark-topic-tools-toggle";
       button.type = "button";
       button.setAttribute("aria-controls", navigation.id);
       button.innerHTML = `
@@ -2193,8 +2445,10 @@
     if (!document.body) return;
 
     const isTopic = /^\/t\//.test(location.pathname);
+    const postRowsThemed = !isTopic || getPostRowsMode() !== "native";
     document.documentElement.classList.toggle(HOME_CLASS, !isTopic);
     document.documentElement.classList.toggle(TOPIC_CLASS, isTopic);
+    document.documentElement.classList.toggle(POST_ROWS_THEME_CLASS, postRowsThemed);
     document.body.classList.toggle(HOME_CLASS, !isTopic);
     document.body.classList.toggle(TOPIC_CLASS, isTopic);
 
@@ -2207,13 +2461,19 @@
     if (isTopic) {
       homeHeading?.remove();
       makeTopicContext();
-      markTopicAuthorNames();
+      markTopicFullNames(postRowsThemed);
+      syncBoostLists(postRowsThemed);
       makeTopicAuthor();
+      syncPostInlineMetadata(postRowsThemed);
       makeTopicToolsToggle();
+      makeBackButton();
+      makePostStyleToggle(postRowsThemed);
     } else {
       topicContext?.remove();
       document.querySelector(".lark-doc-author")?.remove();
-      document.querySelector(".lark-topic-tools-toggle")?.remove();
+      for (const button of document.querySelectorAll(".lark-floating-toggle")) {
+        button.remove();
+      }
       document.documentElement.classList.remove("lark-topic-tools-open");
       makeHomeHeading();
       makeCreateTopicButton();
@@ -2238,6 +2498,11 @@
       return;
     }
 
+    const initialIsTopic = /^\/t\//.test(location.pathname);
+    document.documentElement.classList.toggle(
+      POST_ROWS_THEME_CLASS,
+      !initialIsTopic || getPostRowsMode() !== "native"
+    );
     injectStyle();
     document.documentElement.classList.add("lark-doc-theme");
     applyColorMode();

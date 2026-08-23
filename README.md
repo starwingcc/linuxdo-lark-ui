@@ -2,12 +2,9 @@
 
 一个油猴脚本，把 [linux.do](https://linux.do/) 的 web 界面换成飞书云文档风格——主页像云文档文件列表，话题页像文档编辑页。**只换皮，不碰数据**：Linux DO 的真实内容、链接、按钮与交互全部保留。
 
-<img width="1881" height="865" alt="image" src="https://github.com/user-attachments/assets/c7be2963-8d4b-40a0-8c2c-589f9db082dc" />  
-
-
+<img width="1881" height="865" alt="image" src="https://github.com/user-attachments/assets/c7be2963-8d4b-40a0-8c2c-589f9db082dc" />
 
 <img width="1901" height="866" alt="image" src="https://github.com/user-attachments/assets/32b9f4b5-f567-47a3-b5a2-577393eee70b" />
-
 
 ## 安装
 
@@ -19,14 +16,15 @@
 
 - 顶栏品牌显示为「飞书云文档」，favicon 与启动加载页 Logo 同步替换。
 - **主页**：话题列表 → 云文档文件表格（标题 / 所有者 / 回复 / 浏览量 / 最近访问）。
-- **话题页**：主帖 → 文档正文，回复 → 评论卡片，右侧楼层轴功能不变。
+- **话题页**：主帖与回复采用连续的文档排版，同时保留回复、点赞、Boost、楼层导航等原生功能。
+- 可随时切换文档排版与 Linux DO 原始帖子样式，并提供快捷返回操作。
 - 左侧导航保留原结构与交互，仅换外观。
 - 浅色 / 深色外观自动跟随 linux.do 自身的颜色模式设置（含「自动」档跟随系统），配色对齐飞书网页端（暗色中性色用白色透明度梯度）。
 - 支持 SPA 前进、后退与站内跳转后自动切换页面模式。
 
 ## 设计约束
 
-- 纯 CSS 改造原 DOM，仅添加必要的品牌、搜索入口与路径栏。
+- 以 CSS 为主改造原页面，仅添加必要的界面增强节点。
 - 新增类名统一 `lark-` 前缀，DOM 增强幂等（MutationObserver 频繁触发不产生重复节点）。
 - 不删除或替换原生功能节点；不伪造 Linux DO 不具备的功能。
 - 仅适配桌面端，窄屏只保证可用。
@@ -37,4 +35,5 @@
 MIT
 
 ## 友链
+
 [linux.do](https://linux.do/)
