@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      1.4.3
+// @version      2.6.7
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -19,6 +19,9 @@
   const TOPIC_CLASS = "lark-doc-topic";
   const DARK_CLASS = "lark-dark";
   let faviconObserver;
+  let topicOwnerKey = "";
+  let topicOwnerUsername = "";
+  let topicToolsCloseTimer;
 
   const LARK_LOGO_SVG = `<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" data-icon="LarkLogoColorful" aria-hidden="true">
     <path d="m12.924 12.803.056-.054c.038-.034.076-.072.11-.11l.077-.076.23-.227 1.334-1.319.335-.331c.063-.063.13-.123.195-.183a7.777 7.777 0 0 1 1.823-1.24 7.607 7.607 0 0 1 1.014-.4 13.177 13.177 0 0 0-2.5-5.013 1.203 1.203 0 0 0-.94-.448h-9.65c-.173 0-.246.224-.107.325a28.23 28.23 0 0 1 8 9.098c.007-.006.016-.013.023-.022Z" fill="#00D6B9"></path>
@@ -776,6 +779,10 @@
       box-sizing: border-box !important;
     }
 
+    html.lark-doc-theme.lark-doc-home .topic-list-body .topic-list-item > td .topic-post-badges {
+      display: none !important;
+    }
+
     html.lark-doc-theme.lark-doc-home .topic-list-item .main-link {
       position: relative;
       box-sizing: border-box !important;
@@ -870,7 +877,7 @@
       color: var(--lark-blue-strong) !important;
     }
 
-    /* 话题页：主帖是文档，回复是评论线程 */
+    /* 话题页：主帖是文档正文，回复是连续批注段落 */
     html.lark-doc-theme.lark-doc-topic #main-outlet {
       padding-top: 80px !important;
     }
@@ -878,13 +885,18 @@
     html.lark-doc-theme.lark-doc-topic #topic-title,
     html.lark-doc-theme.lark-doc-topic .container.posts,
     html.lark-doc-theme.lark-doc-topic .topic-above-post-stream-outlet {
-      max-width: 1020px !important;
+      width: 100% !important;
+      max-width: 980px !important;
     }
 
     html.lark-doc-theme.lark-doc-topic #topic-title {
-      margin: 20px auto 12px !important;
-      padding: 0 36px !important;
+      margin: 24px auto 0 !important;
+      padding: 0 48px !important;
       box-sizing: border-box !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic #topic-title .title-wrapper {
+      width: 100% !important;
     }
 
     html.lark-doc-theme.lark-doc-topic #topic-title h1,
@@ -899,58 +911,642 @@
       text-decoration: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic #topic-title .topic-category,
-    html.lark-doc-theme.lark-doc-topic #topic-title .badge-wrapper,
-    html.lark-doc-theme.lark-doc-topic #topic-title .discourse-tags {
-      margin-top: 8px !important;
+    html.lark-doc-theme.lark-doc-topic #topic-title .topic-category {
+      display: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .lark-doc-author {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      margin-top: 18px;
       color: var(--lark-text-3) !important;
       font-size: 13px !important;
     }
 
+    html.lark-doc-theme.lark-doc-topic .lark-doc-author-avatar {
+      display: block;
+      flex: 0 0 auto;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .lark-doc-author-name {
+      overflow: hidden;
+      max-width: 240px;
+      color: var(--lark-text-2) !important;
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-decoration: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .lark-doc-author-separator {
+      width: 1px;
+      height: 14px;
+      margin: 0 8px;
+      background: var(--lark-line);
+    }
+
     html.lark-doc-theme.lark-doc-topic .container.posts {
-      display: flex !important;
-      align-items: flex-start !important;
+      display: block !important;
       margin: 0 auto !important;
+      padding: 0 48px 72px !important;
       box-sizing: border-box !important;
     }
 
+    html.lark-doc-theme.lark-doc-topic .container.posts > .row,
+    html.lark-doc-theme.lark-doc-topic .topic-area,
+    html.lark-doc-theme.lark-doc-topic .posts-wrapper {
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
     html.lark-doc-theme.lark-doc-topic .post-stream {
-      flex: 1 1 auto !important;
+      width: 100% !important;
       min-width: 0 !important;
-      order: 1 !important;
     }
 
-    /* 右侧楼层轴伪装成文档评论定位轨道 */
+    /* 原生楼层时间线收进右下角的文档工具面板 */
     html.lark-doc-theme.lark-doc-topic .topic-navigation {
-      width: 116px !important;
-      margin-left: 12px !important;
-      order: 2 !important;
+      display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .topic-timeline {
-      margin-left: 0 !important;
-      color: var(--lark-text-3) !important;
+    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .topic-navigation {
+      position: fixed !important;
+      z-index: 1080 !important;
+      top: auto !important;
+      right: 24px !important;
+      bottom: 78px !important;
+      left: auto !important;
+      display: block !important;
+      overflow: visible !important;
+      width: 220px !important;
+      height: auto !important;
+      max-width: calc(100vw - 48px) !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 14px !important;
+      border: 1px solid var(--lark-line) !important;
+      border-radius: 10px !important;
+      background: var(--lark-bg) !important;
+      box-shadow: 0 8px 28px var(--lark-shadow-3) !important;
+      animation: lark-topic-tools-fade-in 140ms ease-out both;
+      box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .timeline-container {
-      width: 116px !important;
+    @keyframes lark-topic-tools-fade-in {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
     }
 
-    html.lark-doc-theme.lark-doc-topic .timeline-scrollarea {
-      border-left-color: var(--lark-timeline) !important;
+    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .timeline-container,
+    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .topic-timeline {
+      position: static !important;
+      inset: auto !important;
+      display: block !important;
+      width: 100% !important;
+      max-width: none !important;
+      height: auto !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      transform: none !important;
+      box-sizing: border-box !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .timeline-handle {
-      width: 5px !important;
-      border-radius: 4px !important;
-      background: var(--lark-blue-soft) !important;
+    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .timeline-controls {
+      display: none !important;
     }
 
-    html.lark-doc-theme.lark-doc-topic .timeline-date-wrapper,
-    html.lark-doc-theme.lark-doc-topic .timeline-ago,
-    html.lark-doc-theme.lark-doc-topic .timeline-replies {
+    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .timeline-scrollarea-wrapper {
+      position: relative !important;
+      inset: auto !important;
+      width: 100% !important;
+      margin: 0 !important;
+      transform: none !important;
+      box-sizing: border-box !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .timeline-footer-controls {
+      position: static !important;
+      inset: auto !important;
+      display: flex !important;
+      flex-wrap: wrap !important;
+      align-items: center !important;
+      gap: 8px !important;
+      width: 100% !important;
+      height: auto !important;
+      margin: 14px 0 0 !important;
+      padding: 12px 0 0 !important;
+      border-top: 1px solid var(--lark-line) !important;
+      transform: none !important;
+      box-sizing: border-box !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open
+      .timeline-footer-controls
+      > *,
+    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open
+      .timeline-footer-controls
+      .topic-notifications-button {
+      position: static !important;
+      inset: auto !important;
+      margin: 0 !important;
+      transform: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .lark-topic-tools-toggle {
+      position: fixed;
+      z-index: 1081;
+      right: 24px;
+      bottom: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border: 1px solid var(--lark-line) !important;
+      border-radius: 10px !important;
+      color: var(--lark-text-2) !important;
+      background: var(--lark-bg) !important;
+      box-shadow: 0 4px 16px var(--lark-shadow-2) !important;
+      cursor: pointer;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .lark-topic-tools-toggle:hover,
+    html.lark-doc-theme.lark-doc-topic .lark-topic-tools-toggle:focus-visible,
+    html.lark-doc-theme.lark-doc-topic.lark-topic-tools-open .lark-topic-tools-toggle {
+      border-color: var(--lark-blue-soft) !important;
+      color: var(--lark-blue-strong) !important;
+      background: var(--lark-highlight) !important;
+      outline: none;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .lark-topic-tools-toggle svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post {
+      width: 100% !important;
+      margin: 0 !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post > article,
+    html.lark-doc-theme.lark-doc-topic .topic-post > article.boxed {
+      width: 100% !important;
+      margin: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      box-sizing: border-box !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post:not([data-post-number="1"]) > article {
+      border-top: 1px solid var(--lark-line) !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post > article > .post__row {
+      display: block !important;
+      width: 100% !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post > article > .post__row > .topic-avatar,
+    html.lark-doc-theme.lark-doc-topic .topic-post img.avatar,
+    html.lark-doc-theme.lark-doc-topic .topic-post .small-user-list,
+    html.lark-doc-theme.lark-doc-topic .post__topic-map,
+    html.lark-doc-theme.lark-doc-topic .topic-map {
+      display: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post > article > .post__row > .topic-body {
+      position: relative !important;
+      float: none !important;
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 18px 0 14px !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      box-sizing: border-box !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post[data-post-number="1"]
+      > article
+      > .post__row
+      > .topic-body
+      > .topic-meta-data {
+      display: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post:not([data-post-number="1"])
+      > article
+      > .post__row
+      > .topic-body
+      > .topic-meta-data {
+      display: flex !important;
+      align-items: center !important;
+      min-height: 24px !important;
+      margin: 0 0 14px !important;
+      padding-left: 16px !important;
+      border-left: 2px solid var(--lark-line-strong) !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .topic-meta-data
+      > .names {
+      display: flex !important;
+      align-items: center !important;
+      min-width: 0 !important;
+      margin: 0 !important;
+      color: var(--lark-text-2) !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      .names
+      > :not(.username):not(.full-name):not(.lark-topic-owner-label) {
+      display: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .names .full-name {
+      display: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .names.lark-has-full-name .username {
+      display: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .names.lark-has-full-name .full-name {
+      display: inline !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .names .username,
+    html.lark-doc-theme.lark-doc-topic .topic-post .names .username a,
+    html.lark-doc-theme.lark-doc-topic .topic-post .names .full-name,
+    html.lark-doc-theme.lark-doc-topic .topic-post .names .full-name a {
+      color: var(--lark-text-2) !important;
+      font-size: 14px !important;
+      font-weight: 500 !important;
+      line-height: 22px !important;
+      text-decoration: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .names .lark-topic-owner-label {
+      display: none !important;
+      flex: 0 0 auto;
+      margin-left: 4px;
+      color: var(--lark-text-3);
+      font-size: 12px;
+      font-weight: 400;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      div.topic-owner
+      > article
+      > .post__row
+      > .topic-body
+      > .contents
+      > .cooked::after {
+      display: none !important;
+      content: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .topic-meta-data
+      > .post-infos {
+      margin-left: auto !important;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 120ms ease;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .topic-meta-data
+      > .post-infos,
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .topic-meta-data
+      > .post-infos
+      a,
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .topic-meta-data
+      > .post-infos
+      button {
       color: var(--lark-text-3) !important;
       font-size: 12px !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .post__contents {
+      position: relative !important;
+      overflow: visible !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .post__contents,
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .post__contents
+      > .cooked {
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      color: var(--lark-text) !important;
+      font-size: 16px !important;
+      line-height: 1.8 !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post[data-post-number="1"]
+      > article
+      > .post__row
+      > .topic-body
+      > .post__contents
+      > .cooked {
+      font-size: 17px !important;
+      line-height: 1.85 !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .post__contents
+      > .cooked
+      > :first-child {
+      margin-top: 0 !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .post__contents
+      > .post__menu-area {
+      position: absolute !important;
+      z-index: 5 !important;
+      top: -17px !important;
+      right: 0 !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 2px 4px !important;
+      border: 1px solid var(--lark-line) !important;
+      border-radius: 8px !important;
+      background: var(--lark-bg) !important;
+      box-shadow: 0 4px 12px var(--lark-shadow-2) !important;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 120ms ease;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post[data-post-number="1"]
+      > article
+      > .post__row
+      > .topic-body
+      > .post__contents
+      > .post__menu-area {
+      top: auto !important;
+      bottom: -17px !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post:hover > article > .post__row > .topic-body > .post__contents > .post__menu-area,
+    html.lark-doc-theme.lark-doc-topic .topic-post:focus-within > article > .post__row > .topic-body > .post__contents > .post__menu-area,
+    html.lark-doc-theme.lark-doc-topic .topic-post:hover > article > .post__row > .topic-body > .topic-meta-data > .post-infos,
+    html.lark-doc-theme.lark-doc-topic .topic-post:focus-within > article > .post__row > .topic-body > .topic-meta-data > .post-infos {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post:hover .lark-topic-owner-label,
+    html.lark-doc-theme.lark-doc-topic .topic-post:focus-within .lark-topic-owner-label {
+      display: inline !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .post__contents
+      > .post__menu-area
+      .post-controls {
+      min-height: 32px !important;
+      padding: 0 !important;
+      border: 0 !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .post__contents
+      > .post__menu-area
+      .post-controls
+      .btn {
+      min-height: 30px !important;
+      border: 0 !important;
+      border-radius: 6px !important;
+      color: var(--lark-text-3) !important;
+      background: transparent !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .post__contents
+      > .post__menu-area
+      .post-controls
+      .btn:hover,
+    html.lark-doc-theme.lark-doc-topic
+      .topic-post
+      > article
+      > .post__row
+      > .topic-body
+      > .post__contents
+      > .post__menu-area
+      .post-controls
+      .btn:focus-visible {
+      color: var(--lark-text-2) !important;
+      background: var(--lark-fill-hover) !important;
+    }
+
+    /* 加载父帖时使用独立的紧凑引用块，避免继承普通回复布局造成按钮错位 */
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts {
+      display: block !important;
+      position: relative !important;
+      inset: auto !important;
+      clear: both !important;
+      width: calc(100% - 16px) !important;
+      margin: 14px 0 10px 16px !important;
+      padding: 2px 0 2px 16px !important;
+      border: 0 !important;
+      border-left: 2px solid var(--lark-line) !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      box-sizing: border-box !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .reply {
+      display: block !important;
+      float: none !important;
+      clear: both !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .reply + .reply {
+      border-top: 1px solid var(--lark-line-soft) !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .embedded-posts.bottom > div .row::before {
+      display: none !important;
+      content: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .row {
+      display: block !important;
+      width: 100% !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .topic-avatar {
+      display: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .topic-body {
+      float: none !important;
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 12px 40px 12px 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      box-sizing: border-box !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .topic-meta-data {
+      display: flex !important;
+      align-items: center !important;
+      min-height: 22px !important;
+      margin: 0 0 6px !important;
+      padding: 0 !important;
+      border: 0 !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .post-infos {
+      opacity: 0 !important;
+      pointer-events: none !important;
+      transition: opacity 120ms ease;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .post-link-arrow {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 120ms ease;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .reply:hover .post-infos,
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .reply:focus-within .post-infos,
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .reply:hover .post-link-arrow,
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .reply:focus-within .post-link-arrow {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .post__menu-area {
+      display: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .cooked {
+      width: 100% !important;
+      margin: 0 !important;
+      font-size: 14px !important;
+      line-height: 1.7 !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .collapse-up,
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .collapse-down {
+      position: absolute !important;
+      z-index: 2 !important;
+      top: 8px !important;
+      right: 6px !important;
+      left: auto !important;
+      width: 28px !important;
+      min-width: 28px !important;
+      max-width: 28px !important;
+      height: 28px !important;
+      min-height: 28px !important;
+      max-height: 28px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 1px solid var(--lark-line) !important;
+      border-radius: 6px !important;
+      background: var(--lark-bg) !important;
+      box-shadow: none !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .collapse-up:hover,
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .collapse-down:hover {
+      background: var(--lark-fill-hover) !important;
+    }
+
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .collapse-up .d-icon,
+    html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .collapse-down .d-icon {
+      width: 12px !important;
+      height: 12px !important;
     }
 
     /* 回复编辑器改成评论输入区域 */
@@ -1013,9 +1609,39 @@
         right: 220px;
       }
 
-      html.lark-doc-theme.lark-doc-topic .topic-navigation,
-      html.lark-doc-theme.lark-doc-topic .timeline-container {
-        width: 90px !important;
+      html.lark-doc-theme.lark-doc-topic #topic-title,
+      html.lark-doc-theme.lark-doc-topic .container.posts {
+        padding-right: 28px !important;
+        padding-left: 28px !important;
+      }
+    }
+
+    @media (hover: none) {
+      html.lark-doc-theme.lark-doc-topic
+        .topic-post
+        > article
+        > .post__row
+        > .topic-body
+        > .post__contents
+        > .post__menu-area,
+      html.lark-doc-theme.lark-doc-topic
+        .topic-post
+        > article
+        > .post__row
+        > .topic-body
+        > .topic-meta-data
+        > .post-infos {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      html.lark-doc-theme.lark-doc-topic .topic-post .lark-topic-owner-label {
+        display: inline !important;
+      }
+
+      html.lark-doc-theme.lark-doc-topic .topic-post .embedded-posts .post-link-arrow {
+        opacity: 1;
+        pointer-events: auto;
       }
     }
   `;
@@ -1224,6 +1850,297 @@
     context.append(crumbs, meta);
   }
 
+  function getTopicKey() {
+    return (
+      document.querySelector("#topic-title h1[data-topic-id]")?.dataset.topicId ||
+      document.querySelector("#topic[data-topic-id]")?.dataset.topicId ||
+      location.pathname.match(/^\/t\/[^/]+\/(\d+)/)?.[1] ||
+      location.pathname
+    );
+  }
+
+  function getEditLabel(editTitle) {
+    const match = editTitle?.match(/(\d{4})\s*年\s*(\d+)月\s*(\d+)日/);
+    if (!match) return "已修改";
+
+    const now = new Date();
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (
+      now.getFullYear() === year &&
+      now.getMonth() + 1 === month &&
+      now.getDate() === day
+    ) {
+      return "今天修改";
+    }
+
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    if (
+      yesterday.getFullYear() === year &&
+      yesterday.getMonth() + 1 === month &&
+      yesterday.getDate() === day
+    ) {
+      return "昨天修改";
+    }
+
+    return "已修改";
+  }
+
+  function markTopicAuthorNames() {
+    const currentTopicKey = getTopicKey();
+    const detectedOwnerUsername = document
+      .querySelector(
+        ".topic-post.topic-owner > article > .post__row > .topic-body > .topic-meta-data .names :is(.full-name, .username) a[data-user-card]"
+      )
+      ?.getAttribute("data-user-card")
+      ?.trim()
+      .toLowerCase();
+
+    if (detectedOwnerUsername) {
+      topicOwnerKey = currentTopicKey;
+      topicOwnerUsername = detectedOwnerUsername;
+    } else if (topicOwnerKey !== currentTopicKey) {
+      topicOwnerKey = currentTopicKey;
+      topicOwnerUsername = "";
+    }
+
+    for (const names of document.querySelectorAll(".topic-post .names")) {
+      const fullNameNode = names.querySelector(":scope > .full-name");
+      const usernameNode = names.querySelector(":scope > .username");
+      const fullName = fullNameNode?.textContent?.trim();
+      const username = names
+        .querySelector(":scope > :is(.full-name, .username) a[data-user-card]")
+        ?.getAttribute("data-user-card")
+        ?.trim()
+        .toLowerCase();
+      const owningPost = names.closest(".topic-post");
+      const isEmbeddedName = Boolean(names.closest(".embedded-posts"));
+      const isTopicOwner =
+        (!isEmbeddedName && owningPost?.classList.contains("topic-owner")) ||
+        Boolean(topicOwnerUsername && username === topicOwnerUsername);
+      names.classList.toggle("lark-has-full-name", Boolean(fullName));
+      names.classList.toggle("lark-topic-owner-name", isTopicOwner);
+
+      let ownerLabel = names.querySelector(":scope > .lark-topic-owner-label");
+      if (!isTopicOwner) {
+        ownerLabel?.remove();
+        continue;
+      }
+
+      if (!ownerLabel) {
+        ownerLabel = document.createElement("span");
+        ownerLabel.className = "lark-topic-owner-label";
+        ownerLabel.textContent = "[话题所有者]";
+      }
+
+      const displayNameNode = fullName ? fullNameNode : usernameNode;
+      if (displayNameNode && ownerLabel.previousElementSibling !== displayNameNode) {
+        displayNameNode.after(ownerLabel);
+      }
+    }
+  }
+
+  function makeTopicAuthor() {
+    const titleWrapper = document.querySelector("#topic-title .title-wrapper");
+    const heading = titleWrapper?.querySelector(":scope > h1");
+    const firstPost = document.querySelector('.topic-post[data-post-number="1"]');
+    const topicKey = getTopicKey();
+    const existing = document.querySelector(".lark-doc-author");
+
+    if (!titleWrapper || !heading || !firstPost) {
+      if (existing && existing.dataset.topicKey !== topicKey) existing.remove();
+      return;
+    }
+
+    const sourceUser = firstPost.querySelector(
+      ":scope > article > .post__row > .topic-body > .topic-meta-data .names :is(.full-name, .username) a[data-user-card], :scope > article > .post__row > .topic-body > .topic-meta-data .names :is(.full-name, .username) a"
+    );
+    const sourceFullName = firstPost
+      .querySelector(
+        ":scope > article > .post__row > .topic-body > .topic-meta-data .names .full-name"
+      )
+      ?.textContent?.trim()
+      .replace(/\s+/g, " ");
+    const sourceAvatar = firstPost.querySelector(
+      ":scope > article > .post__row > .topic-avatar .main-avatar img.avatar"
+    );
+    const sourceUsername = firstPost
+      .querySelector(
+        ":scope > article > .post__row > .topic-body > .topic-meta-data .names .username"
+      )
+      ?.textContent?.trim()
+      .replace(/\s+/g, " ");
+    const displayName =
+      sourceFullName || sourceUsername || sourceUser?.textContent?.trim().replace(/\s+/g, " ");
+    if (!sourceUser || !displayName) return;
+
+    const postDate = firstPost.querySelector(
+      ":scope > article > .post__row > .topic-body > .topic-meta-data .post-info.post-date a.post-date"
+    );
+    const relativeDate =
+      postDate?.getAttribute("aria-label") ||
+      postDate?.textContent?.trim().replace(/\s+/g, " ") ||
+      "";
+    const editTitle =
+      firstPost.querySelector(
+        ":scope > article > .post__row > .topic-body > .topic-meta-data .post-info.edits button"
+      )?.title || "";
+    const timeLabel = editTitle
+      ? getEditLabel(editTitle)
+      : relativeDate
+        ? `${relativeDate}发布`
+        : "";
+    const renderKey = [
+      topicKey,
+      displayName,
+      sourceAvatar?.currentSrc || sourceAvatar?.src,
+      timeLabel
+    ].join("|");
+
+    if (
+      existing?.dataset.renderKey === renderKey &&
+      existing.parentElement === titleWrapper &&
+      existing.previousElementSibling === heading
+    ) {
+      return;
+    }
+
+    existing?.remove();
+    const author = document.createElement("div");
+    author.className = "lark-doc-author";
+    author.dataset.topicKey = topicKey;
+    author.dataset.renderKey = renderKey;
+
+    if (sourceAvatar) {
+      const avatarLink = document.createElement("a");
+      avatarLink.href = sourceUser.href;
+      avatarLink.tabIndex = -1;
+      avatarLink.setAttribute("aria-hidden", "true");
+
+      const avatar = document.createElement("img");
+      avatar.className = "lark-doc-author-avatar";
+      avatar.src = sourceAvatar.currentSrc || sourceAvatar.src;
+      avatar.alt = "";
+      avatar.width = 24;
+      avatar.height = 24;
+      avatarLink.appendChild(avatar);
+      author.appendChild(avatarLink);
+    }
+
+    const name = document.createElement("a");
+    name.className = "lark-doc-author-name";
+    name.href = sourceUser.href;
+    name.textContent = displayName;
+    const userCard = sourceUser.getAttribute("data-user-card");
+    if (userCard) name.setAttribute("data-user-card", userCard);
+    author.appendChild(name);
+
+    if (timeLabel) {
+      const separator = document.createElement("span");
+      separator.className = "lark-doc-author-separator";
+      separator.setAttribute("aria-hidden", "true");
+
+      const time = document.createElement("span");
+      time.className = "lark-doc-author-time";
+      time.textContent = timeLabel;
+      time.title = editTitle || postDate?.title || relativeDate;
+      author.append(separator, time);
+    }
+
+    heading.after(author);
+  }
+
+  function setTopicToolsOpen(button, isOpen) {
+    if (isOpen && topicToolsCloseTimer) {
+      clearTimeout(topicToolsCloseTimer);
+      topicToolsCloseTimer = undefined;
+    }
+    document.documentElement.classList.toggle("lark-topic-tools-open", isOpen);
+    if (!button) return;
+    const label = isOpen ? "收起话题导航" : "展开话题导航";
+    button.setAttribute("aria-expanded", String(isOpen));
+    button.setAttribute("aria-label", label);
+    button.title = label;
+  }
+
+  function scheduleTopicToolsClose() {
+    clearTimeout(topicToolsCloseTimer);
+    topicToolsCloseTimer = setTimeout(() => {
+      setTopicToolsOpen(document.querySelector(".lark-topic-tools-toggle"), false);
+      topicToolsCloseTimer = undefined;
+    }, 160);
+  }
+
+  function makeTopicToolsToggle() {
+    const navigation = document.querySelector(".topic-navigation");
+    let button = document.querySelector(".lark-topic-tools-toggle");
+
+    if (!navigation || !document.body) {
+      button?.remove();
+      document.documentElement.classList.remove("lark-topic-tools-open");
+      return;
+    }
+
+    navigation.id ||= "lark-topic-tools-panel";
+    if (!navigation.dataset.larkHoverBound) {
+      navigation.dataset.larkHoverBound = "true";
+      navigation.addEventListener("pointerenter", () => {
+        clearTimeout(topicToolsCloseTimer);
+        topicToolsCloseTimer = undefined;
+      });
+      navigation.addEventListener("pointerleave", scheduleTopicToolsClose);
+    }
+
+    if (!navigation.dataset.larkReplyCloseBound) {
+      navigation.dataset.larkReplyCloseBound = "true";
+      navigation.addEventListener(
+        "click",
+        (event) => {
+          if (!event.target.closest(".reply-to-post")) return;
+          requestAnimationFrame(() => {
+            setTopicToolsOpen(document.querySelector(".lark-topic-tools-toggle"), false);
+          });
+        },
+        true
+      );
+    }
+
+    const topicKey = getTopicKey();
+    if (!button) {
+      button = document.createElement("button");
+      button.className = "lark-topic-tools-toggle";
+      button.type = "button";
+      button.setAttribute("aria-controls", navigation.id);
+      button.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M8 7h11M8 12h11M8 17h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="4" cy="7" r="1.25" fill="currentColor"/>
+          <circle cx="4" cy="12" r="1.25" fill="currentColor"/>
+          <circle cx="4" cy="17" r="1.25" fill="currentColor"/>
+        </svg>`;
+      button.addEventListener("pointerenter", () => setTopicToolsOpen(button, true));
+      button.addEventListener("pointerleave", scheduleTopicToolsClose);
+      button.addEventListener("focus", () => setTopicToolsOpen(button, true));
+      button.addEventListener("blur", scheduleTopicToolsClose);
+      button.addEventListener("click", (event) => {
+        const hasHover = window.matchMedia?.("(hover: hover)").matches;
+        if (hasHover && event.detail !== 0) return;
+        const isOpen = !document.documentElement.classList.contains("lark-topic-tools-open");
+        setTopicToolsOpen(button, isOpen);
+      });
+      document.body.appendChild(button);
+    }
+
+    if (button.dataset.topicKey !== topicKey) {
+      setTopicToolsOpen(button, false);
+      button.dataset.topicKey = topicKey;
+    }
+    button.setAttribute("aria-controls", navigation.id);
+    const isOpen = document.documentElement.classList.contains("lark-topic-tools-open");
+    setTopicToolsOpen(button, isOpen);
+  }
+
   function makeColumnLabels() {
     const labels = [
       ["th.default, th.main-link", "标题"],
@@ -1290,8 +2207,14 @@
     if (isTopic) {
       homeHeading?.remove();
       makeTopicContext();
+      markTopicAuthorNames();
+      makeTopicAuthor();
+      makeTopicToolsToggle();
     } else {
       topicContext?.remove();
+      document.querySelector(".lark-doc-author")?.remove();
+      document.querySelector(".lark-topic-tools-toggle")?.remove();
+      document.documentElement.classList.remove("lark-topic-tools-open");
       makeHomeHeading();
       makeCreateTopicButton();
       makeColumnLabels();
