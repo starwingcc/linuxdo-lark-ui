@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      2.8.3
+// @version      2.8.4
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -23,6 +23,7 @@
   let faviconObserver;
   let postRowsModeFallback = "document";
   let topicToolsCloseTimer;
+  let topicToolsOutsideBound = false;
 
   const LARK_LOGO_SVG = `<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" data-icon="LarkLogoColorful" aria-hidden="true">
     <path d="m12.924 12.803.056-.054c.038-.034.076-.072.11-.11l.077-.076.23-.227 1.334-1.319.335-.331c.063-.063.13-.123.195-.183a7.777 7.777 0 0 1 1.823-1.24 7.607 7.607 0 0 1 1.014-.4 13.177 13.177 0 0 0-2.5-5.013 1.203 1.203 0 0 0-.94-.448h-9.65c-.173 0-.246.224-.107.325a28.23 28.23 0 0 1 8 9.098c.007-.006.016-.013.023-.022Z" fill="#00D6B9"></path>
@@ -2332,6 +2333,30 @@
       button?.remove();
       document.documentElement.classList.remove("lark-topic-tools-open");
       return;
+    }
+
+    if (!topicToolsOutsideBound) {
+      document.addEventListener(
+        "pointerdown",
+        (event) => {
+          if (!document.documentElement.classList.contains("lark-topic-tools-open")) {
+            return;
+          }
+          const target = event.target;
+          if (
+            target instanceof Element &&
+            target.closest(".topic-navigation, .lark-topic-tools-toggle")
+          ) {
+            return;
+          }
+          setTopicToolsOpen(
+            document.querySelector(".lark-topic-tools-toggle"),
+            false
+          );
+        },
+        true
+      );
+      topicToolsOutsideBound = true;
     }
 
     navigation.id ||= "lark-topic-tools-panel";
