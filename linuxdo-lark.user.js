@@ -1590,10 +1590,63 @@
 
     .lark-doc-topic .lark-inline-boosts {
       position: static !important;
-      display: block !important;
+      display: flex !important;
+      align-items: center !important;
+      flex-wrap: wrap !important;
+      gap: 8px !important;
       width: 100%;
       opacity: 1 !important;
       pointer-events: auto !important;
+    }
+
+    .lark-doc-topic .lark-inline-boosts .discourse-boosts {
+      display: inline-flex !important;
+      align-items: center !important;
+      flex-wrap: wrap !important;
+      gap: 8px !important;
+    }
+
+    .lark-doc-topic .lark-inline-boost-actions {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+    }
+
+    .lark-doc-topic .lark-inline-boost-action {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      min-width: 28px !important;
+      min-height: 28px !important;
+      padding: 0 !important;
+      border: 0 !important;
+      border-radius: 6px !important;
+      background: transparent !important;
+      color: var(--lark-text-3) !important;
+      box-shadow: none !important;
+    }
+
+    .lark-doc-topic .lark-inline-boost-action:is(:hover, :focus-visible) {
+      background: var(--lark-fill-hover) !important;
+      color: var(--lark-text-2) !important;
+    }
+
+    .lark-doc-topic .lark-inline-boost-action .d-icon,
+    .lark-doc-topic .lark-inline-boost-action svg {
+      width: 14px !important;
+      height: 14px !important;
+    }
+
+    .lark-doc-topic .lark-inline-boost-action-label {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      margin: -1px !important;
+      padding: 0 !important;
+      border: 0 !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
     }
 
     .lark-doc-topic
@@ -1601,7 +1654,7 @@
       .post__body.topic-body
       > .post__contents
       > .post__menu-area
-      > .discourse-boosts__post-menu {
+      > .discourse-boosts__post-menu.lark-source-boosts-hidden {
       display: none !important;
     }
 
@@ -2152,16 +2205,255 @@
     }
   }
 
+  function getInteractiveNodes(root) {
+    if (!root) return [];
+    const nodes = root.matches?.("button, a, [role='button']")
+      ? [root]
+      : [];
+    nodes.push(...root.querySelectorAll("button, a, [role='button']"));
+    return nodes;
+  }
+
+  function isBoostAddNode(node) {
+    if (!node) return false;
+    const label = [
+      node.textContent,
+      node.getAttribute("aria-label"),
+      node.title,
+      node.className
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+
+    return (
+      node.matches?.(
+        ".discourse-boosts__add-btn, .discourse-boosts-trigger, .post-action-menu__boost"
+      ) ||
+      label.includes("+") ||
+      /\b(add|create|new|boost|boast)\b/i.test(label) ||
+      /发布|新增|添加/.test(label)
+    );
+  }
+
+  function isBoostAddBubble(bubble) {
+    const interactiveNodes = getInteractiveNodes(bubble);
+    return interactiveNodes.some(isBoostAddNode);
+  }
+
+  function getBoostActionSources(menuArea, sourceMenu) {
+    const selectors = [
+      "button.post-action-menu__boost",
+      "button.discourse-boosts__add-btn",
+      "button.discourse-boosts-trigger",
+      ".post-action-menu__boost",
+      ".discourse-boosts__add-btn",
+      ".discourse-boosts-trigger"
+    ].join(", ");
+    const nodes = [
+      ...(menuArea ? Array.from(menuArea.querySelectorAll(selectors)) : []),
+      ...(sourceMenu
+        ? Array.from(
+          sourceMenu.querySelectorAll(
+            ":scope > :is(button, a, [role='button']):not(.discourse-boosts__cooked)"
+          )
+        )
+        : []),
+      ...(sourceMenu
+        ? Array.from(sourceMenu.querySelectorAll(".discourse-boosts__bubble"))
+          .filter(isBoostAddBubble)
+          .flatMap(getInteractiveNodes)
+        : [])
+    ];
+    const seen = new Set();
+
+    return nodes
+      .filter((node) => {
+        if (
+          seen.has(node) ||
+          (node.closest(".discourse-boosts__bubble") && !isBoostAddNode(node))
+        ) {
+          return false;
+        }
+        seen.add(node);
+        return true;
+      })
+      .map((node) => {
+        const label = [
+          node.textContent,
+          node.getAttribute("aria-label"),
+          node.title
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim() || "发布 Boost";
+        const signature = [
+          node.className,
+          node.getAttribute("aria-label"),
+          node.title,
+          node.textContent,
+          node.disabled,
+          node.getAttribute("aria-disabled")
+        ]
+          .filter((value) => value !== undefined && value !== null)
+          .join("\u001e");
+        return { node, signature, label };
+      });
+  }
+
+  function findBoostActionNode(post) {
+    const selectors = [
+      ".discourse-boosts__add-btn",
+      ".discourse-boosts-trigger",
+      ".post-action-menu__boost",
+      "[data-action*='boost' i]",
+      "[aria-label*='boost' i]",
+      "[title*='boost' i]",
+      "[aria-label*='boast' i]",
+      "[title*='boast' i]"
+    ].join(", ");
+    return Array.from(post.querySelectorAll(selectors)).find(
+      (node) =>
+        !node.closest(".lark-inline-boosts") &&
+        (!node.closest(".discourse-boosts__bubble") || isBoostAddNode(node)) &&
+        node.matches("button, a, [role='button']")
+    );
+  }
+
+  function clickBoostActionWithAnchor(sourceNode, anchorNode) {
+    if (!sourceNode) return false;
+    const rect = anchorNode?.getBoundingClientRect?.();
+    const hasAnchor = rect && rect.width > 0 && rect.height > 0;
+    const previous = {
+      position: sourceNode.style.position,
+      left: sourceNode.style.left,
+      top: sourceNode.style.top,
+      width: sourceNode.style.width,
+      height: sourceNode.style.height,
+      zIndex: sourceNode.style.zIndex,
+      opacity: sourceNode.style.opacity,
+      pointerEvents: sourceNode.style.pointerEvents,
+      visibility: sourceNode.style.visibility
+    };
+    const hiddenMenu = sourceNode.closest(".lark-source-boosts-hidden");
+    const previousMenuVisibility = hiddenMenu?.style.visibility;
+
+    if (hasAnchor) {
+      hiddenMenu?.classList.remove("lark-source-boosts-hidden");
+      if (hiddenMenu) hiddenMenu.style.visibility = "hidden";
+      Object.assign(sourceNode.style, {
+        position: "fixed",
+        left: `${rect.left}px`,
+        top: `${rect.top}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+        zIndex: "-1",
+        opacity: "0",
+        pointerEvents: "none",
+        visibility: "hidden"
+      });
+    }
+
+    const clientX = hasAnchor ? rect.left + rect.width / 2 : 0;
+    const clientY = hasAnchor ? rect.top + rect.height / 2 : 0;
+    const eventOptions = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX,
+      clientY
+    };
+    sourceNode.dispatchEvent(new MouseEvent("mousedown", eventOptions));
+    sourceNode.dispatchEvent(new MouseEvent("mouseup", eventOptions));
+    sourceNode.dispatchEvent(new MouseEvent("click", eventOptions));
+
+    if (hasAnchor) {
+      setTimeout(() => {
+        Object.assign(sourceNode.style, previous);
+        if (hiddenMenu) hiddenMenu.style.visibility = previousMenuVisibility;
+        hiddenMenu?.classList.add("lark-source-boosts-hidden");
+      }, 250);
+    }
+    return true;
+  }
+
+  function triggerBoostAction(post, anchorNode) {
+    const action = findBoostActionNode(post);
+    if (clickBoostActionWithAnchor(action, anchorNode)) return;
+
+    const more = post.querySelector(
+      ".post-action-menu__show-more, .show-more-actions, button[aria-label*='更多'], button[title*='更多'], button[aria-label*='more' i], button[title*='more' i]"
+    );
+    if (!more || more.closest(".lark-inline-boosts")) return;
+    clickBoostActionWithAnchor(more, anchorNode);
+    setTimeout(() => clickBoostActionWithAnchor(findBoostActionNode(post), anchorNode), 0);
+  }
+
+  function getBoostActionIconSource(post, sourceNode) {
+    const candidates = [
+      sourceNode,
+      ...post.querySelectorAll(
+        [
+          ".post-action-menu__boost",
+          ".discourse-boosts-trigger",
+          ".discourse-boosts__add-btn",
+          "[data-action*='boost' i]",
+          "[aria-label*='boost' i]",
+          "[title*='boost' i]",
+          "[aria-label*='boast' i]",
+          "[title*='boast' i]"
+        ].join(", ")
+      )
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+      if (candidate.closest(".lark-inline-boosts")) continue;
+      const icon = candidate.querySelector?.(":scope > .d-icon, :scope > svg, .d-icon, svg");
+      const iconClass = String(icon?.className?.baseVal || icon?.className || "");
+      if (!icon || /plus|add/i.test(iconClass)) continue;
+      return icon;
+    }
+
+    return null;
+  }
+
+  function makeBoostActionIcon(post, sourceNode) {
+    const sourceIcon = getBoostActionIconSource(post, sourceNode);
+    if (sourceIcon) {
+      const icon = sourceIcon.cloneNode(true);
+      for (const node of icon.querySelectorAll("[id]")) node.removeAttribute("id");
+      icon.setAttribute("aria-hidden", "true");
+      return icon;
+    }
+
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    icon.setAttribute("class", "fa d-icon d-icon-rocket svg-icon svg-string");
+    icon.setAttribute("viewBox", "0 0 512 512");
+    icon.setAttribute("aria-hidden", "true");
+    icon.innerHTML = '<path fill="currentColor" d="M156.6 384.9 125.7 354c-8.5-8.5-11.5-21-7.7-32.4l18.6-55.9-73 73c-6.8 6.8-10.7 16.1-10.7 25.8V448c0 17.7 14.3 32 32 32h83.5c9.7 0 19-3.9 25.8-10.7l73-73-55.9 18.6c-11.4 3.8-23.9.8-32.4-7.7l-22.3-22.3zM384 0c-53 0-107.5 21.7-154.5 68.7L109.1 189.1c-7.7 7.7-11.8 18.2-11.2 29.1l4.1 76.4-63.3 63.3c-6.2 6.2-6.2 16.4 0 22.6l92.8 92.8c6.2 6.2 16.4 6.2 22.6 0l63.3-63.3 76.4 4.1c10.9.6 21.4-3.5 29.1-11.2l120.4-120.4C490.3 235.5 512 181 512 128V32c0-17.7-14.3-32-32-32h-96zm32 160a64 64 0 1 1 0-128 64 64 0 0 1 0 128z"/>';
+    return icon;
+  }
+
   function syncBoostLists(enabled = true) {
     for (const post of document.querySelectorAll(".topic-post[data-post-number]")) {
       const contents = getPostBody(post)?.querySelector(":scope > .post__contents");
       if (!enabled) {
+        contents
+          ?.querySelector(":scope > .post__menu-area > .discourse-boosts__post-menu")
+          ?.classList.remove("lark-source-boosts-hidden");
         contents
           ?.querySelector(":scope > :is(.lark-inline-boosts, .lark-boost-table)")
           ?.remove();
         continue;
       }
       const cooked = contents?.querySelector(":scope > .cooked");
+      const menuArea = contents?.querySelector(":scope > .post__menu-area");
+      const sourceMenu = contents?.querySelector(
+        ":scope > .post__menu-area > .discourse-boosts__post-menu"
+      );
       const bubbles = contents
         ? Array.from(
           contents.querySelectorAll(
@@ -2170,31 +2462,49 @@
         )
         : [];
       const sources = bubbles
+        .filter((bubble) => !isBoostAddBubble(bubble))
         .map((bubble) => {
-          const button = bubble.querySelector(":scope > .discourse-boosts__cooked");
-          const html = bubble.innerHTML?.trim() || "";
-          return button && html ? { bubble, button, html } : null;
+          const html = bubble.outerHTML?.trim() || "";
+          const interactiveNodes = getInteractiveNodes(bubble);
+          return html ? { bubble, interactiveNodes, html } : null;
         })
         .filter(Boolean);
+      const actionSources = getBoostActionSources(menuArea, sourceMenu);
+      const fallbackAction =
+        actionSources.length === 0 && sources.length > 0
+          ? [{ node: null, signature: "lark-fallback-boost-action", label: "发布 Boost" }]
+          : [];
+      const allActionSources = [...actionSources, ...fallbackAction];
       let boostList = contents?.querySelector(
         ":scope > :is(.lark-inline-boosts, .lark-boost-table)"
       );
+
+      sourceMenu?.classList.toggle("lark-source-boosts-hidden", sources.length > 0);
 
       if (!contents || !cooked || sources.length === 0) {
         boostList?.remove();
         continue;
       }
 
-      const signature = sources.map(({ html }) => html).join("\u001e");
+      const signature = [
+        sources.map(({ html }) => html).join("\u001e"),
+        allActionSources.map(({ signature }) => signature).join("\u001e")
+      ].join("\u001f");
       const sameSources =
         boostList?._larkBoostSources?.length === sources.length &&
         sources.every(
-          ({ button }, index) => boostList._larkBoostSources[index] === button
+          ({ bubble }, index) => boostList._larkBoostSources[index] === bubble
+        );
+      const sameActionSources =
+        boostList?._larkBoostActionSources?.length === allActionSources.length &&
+        allActionSources.every(
+          ({ node }, index) => boostList._larkBoostActionSources[index] === node
         );
       if (
         boostList?.classList.contains("lark-inline-boosts") &&
         boostList.dataset.signature === signature &&
         sameSources &&
+        sameActionSources &&
         boostList.previousElementSibling === cooked
       ) {
         continue;
@@ -2205,26 +2515,55 @@
       boostList.className = "discourse-boosts__post-menu lark-inline-boosts";
       boostList.setAttribute("aria-label", "Boost");
       boostList.dataset.signature = signature;
-      boostList._larkBoostSources = sources.map(({ button }) => button);
+      boostList._larkBoostSources = sources.map(({ bubble }) => bubble);
+      boostList._larkBoostActionSources = allActionSources.map(({ node }) => node);
 
       const boosts = document.createElement("div");
       boosts.className = "discourse-boosts";
       const list = document.createElement("div");
       list.className = "discourse-boosts__list";
 
-      for (const { bubble, button: sourceButton } of sources) {
+      for (const { bubble, interactiveNodes } of sources) {
         const clone = bubble.cloneNode(true);
         for (const node of clone.querySelectorAll("[id]")) node.removeAttribute("id");
-        const cloneButton = clone.querySelector(":scope > .discourse-boosts__cooked");
-        cloneButton?.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          sourceButton.click();
+        const cloneInteractiveNodes = getInteractiveNodes(clone);
+        cloneInteractiveNodes.forEach((cloneNode, index) => {
+          const sourceNode = interactiveNodes[index];
+          if (!sourceNode) return;
+          cloneNode.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            clickBoostActionWithAnchor(sourceNode, cloneNode);
+          });
         });
         list.appendChild(clone);
       }
 
-      boosts.appendChild(list);
+      if (list.children.length > 0) boosts.appendChild(list);
+      if (allActionSources.length > 0) {
+        const actions = document.createElement("div");
+        actions.className = "lark-inline-boost-actions";
+        for (const { node: sourceNode, label } of allActionSources) {
+          const action = document.createElement("button");
+          action.className = "lark-inline-boost-action";
+          action.type = "button";
+          action.setAttribute("aria-label", label);
+          action.title = label;
+          const icon = makeBoostActionIcon(post, sourceNode);
+          const text = document.createElement("span");
+          text.className = "lark-inline-boost-action-label";
+          text.textContent = label;
+          action.append(icon, text);
+          action.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (sourceNode) clickBoostActionWithAnchor(sourceNode, action);
+            else triggerBoostAction(post, action);
+          });
+          actions.appendChild(action);
+        }
+        boosts.appendChild(actions);
+      }
       boostList.appendChild(boosts);
       cooked.after(boostList);
     }
