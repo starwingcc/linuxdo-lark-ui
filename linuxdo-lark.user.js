@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      2.8.5
+// @version      2.8.6
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -2052,6 +2052,37 @@
     }
   }
 
+  function forwardClonedButtonClick(event, sourceButton, cloneButton) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Floating Kit positions its menu from the original Glimmer-owned trigger.
+    // That trigger lives in a hidden menu, so make it report the visible clone's
+    // position while keeping the framework-owned node in its original parent.
+    sourceButton.getBoundingClientRect = () =>
+      cloneButton.isConnected
+        ? cloneButton.getBoundingClientRect()
+        : HTMLElement.prototype.getBoundingClientRect.call(sourceButton);
+
+    sourceButton.dispatchEvent(new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      view: window,
+      detail: event.detail,
+      screenX: event.screenX,
+      screenY: event.screenY,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      ctrlKey: event.ctrlKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+      metaKey: event.metaKey,
+      button: event.button,
+      buttons: event.buttons
+    }));
+  }
+
   function syncBoostLists(enabled = true) {
     for (const post of document.querySelectorAll(".topic-post[data-post-number]")) {
       const contents = getPostBody(post)?.querySelector(":scope > .post__contents");
@@ -2062,13 +2093,13 @@
         continue;
       }
       const cooked = contents?.querySelector(":scope > .cooked");
-      const bubbles = contents
-        ? Array.from(
-          contents.querySelectorAll(
-            ":scope > .post__menu-area > .discourse-boosts__post-menu .discourse-boosts__bubble"
-          )
-        )
+      const sourceMenu = contents?.querySelector(
+        ":scope > .post__menu-area > .discourse-boosts__post-menu"
+      );
+      const bubbles = sourceMenu
+        ? Array.from(sourceMenu.querySelectorAll(".discourse-boosts__bubble"))
         : [];
+      const addButton = sourceMenu?.querySelector(".discourse-boosts__add-btn");
       const sources = bubbles
         .map((bubble) => {
           const button = bubble.querySelector(":scope > .discourse-boosts__cooked");
@@ -2085,11 +2116,18 @@
         continue;
       }
 
-      const signature = sources.map(({ html }) => html).join("\u001e");
+      const sourceButtons = [
+        ...sources.map(({ button }) => button),
+        ...(addButton ? [addButton] : [])
+      ];
+      const signature = [
+        sources.map(({ html }) => html).join("\u001e"),
+        addButton ? "can-add" : ""
+      ].join("\u001f");
       const sameSources =
-        boostList?._larkBoostSources?.length === sources.length &&
-        sources.every(
-          ({ button }, index) => boostList._larkBoostSources[index] === button
+        boostList?._larkBoostSources?.length === sourceButtons.length &&
+        sourceButtons.every(
+          (button, index) => boostList._larkBoostSources[index] === button
         );
       if (
         boostList?.classList.contains("lark-inline-boosts") &&
@@ -2105,7 +2143,7 @@
       boostList.className = "discourse-boosts__post-menu lark-inline-boosts";
       boostList.setAttribute("aria-label", "Boost");
       boostList.dataset.signature = signature;
-      boostList._larkBoostSources = sources.map(({ button }) => button);
+      boostList._larkBoostSources = sourceButtons;
 
       const boosts = document.createElement("div");
       boosts.className = "discourse-boosts";
@@ -2117,9 +2155,18 @@
         for (const node of clone.querySelectorAll("[id]")) node.removeAttribute("id");
         const cloneButton = clone.querySelector(":scope > .discourse-boosts__cooked");
         cloneButton?.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          sourceButton.click();
+          forwardClonedButtonClick(event, sourceButton, cloneButton);
+        });
+        list.appendChild(clone);
+      }
+
+      if (addButton) {
+        const clone = addButton.cloneNode(true);
+        for (const node of [clone, ...clone.querySelectorAll("[id]")]) {
+          node.removeAttribute("id");
+        }
+        clone.addEventListener("click", (event) => {
+          forwardClonedButtonClick(event, addButton, clone);
         });
         list.appendChild(clone);
       }
@@ -2176,11 +2223,10 @@
       firstPostBody.querySelector(
         ":scope > .topic-meta-data .post-info.edits button"
       )?.title || "";
-    const timeLabel = editTitle
-      ? getEditLabel(editTitle)
-      : relativeDate
-        ? `${relativeDate}发布`
-        : "";
+    const timeLabel = [
+      relativeDate ? `${relativeDate}发布` : "",
+      editTitle ? getEditLabel(editTitle) : ""
+    ].filter(Boolean).join(" · ");
     const renderKey = [
       topicKey,
       displayName,
@@ -2230,7 +2276,11 @@
       const time = document.createElement("span");
       time.className = "lark-post-inline-meta-item lark-doc-author-time";
       time.textContent = timeLabel;
-      time.title = editTitle || postDate?.title || relativeDate;
+      const publishedTitle =
+        postDate?.querySelector(".relative-date[title]")?.title ||
+        postDate?.title ||
+        relativeDate;
+      time.title = [publishedTitle, editTitle].filter(Boolean).join("；");
       author.appendChild(time);
     }
 
