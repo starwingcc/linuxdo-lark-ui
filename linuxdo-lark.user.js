@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      2.8.4
+// @version      2.8.9
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -20,6 +20,7 @@
   const DARK_CLASS = "lark-dark";
   const POST_ROWS_THEME_CLASS = "lark-post-rows-themed";
   const POST_ROWS_MODE_KEY = "linuxdo-lark-post-rows-mode";
+  const HOME_FILE_KINDS = ["doc", "sheet", "slide", "sheet", "form", "bitable"];
   let faviconObserver;
   let postRowsModeFallback = "document";
   let topicToolsCloseTimer;
@@ -31,6 +32,33 @@
     <path d="M23.732 9.295a7.55 7.55 0 0 0-3.35-.776 7.521 7.521 0 0 0-2.284.35c-.054.016-.107.035-.158.05a8.297 8.297 0 0 0-.855.35 7.14 7.14 0 0 0-.552.297 6.716 6.716 0 0 0-.533.347c-.123.089-.243.18-.363.275-.13.104-.252.211-.375.321-.067.06-.13.123-.196.184l-.334.328-1.338 1.321-.23.228-.076.075c-.038.038-.076.073-.11.11l-.057.054a1.914 1.914 0 0 1-.085.08c-.032.028-.063.06-.095.088a13.286 13.286 0 0 1-2.748 1.946c.06.028.12.057.18.082l.142.066c.044.022.091.041.139.063l.135.06.149.067.17.075.164.07c.073.031.142.06.215.088.056.025.116.047.173.07.088.034.177.072.268.107.085.031.168.066.253.098l.189.072c.11.041.218.082.328.12.057.019.11.041.167.06.08.028.155.053.234.082l.192.066.284.095.3.095c.123.037.243.075.366.11l.246.072c.164.048.331.095.495.14.06.015.12.03.18.043.114.029.227.05.34.07.13.022.26.04.389.057a5.815 5.815 0 0 0 .994.019 5.172 5.172 0 0 0 1.413-.3 5.405 5.405 0 0 0 .726-.334c.06-.035.122-.07.182-.108a7.96 7.96 0 0 0 .432-.297 5.362 5.362 0 0 0 .577-.517 5.285 5.285 0 0 0 .37-.429 5.797 5.797 0 0 0 .527-.827l.13-.258 1.166-2.325-.003.006a7.391 7.391 0 0 1 1.527-2.186Z" fill="#133C9A"></path>
   </svg>`;
   const LARK_LOGO_DATA_URL = `data:image/svg+xml,${encodeURIComponent(LARK_LOGO_SVG)}`;
+  const HOME_FILE_ICON_URLS = {
+    doc: makeLarkTypeIconDataUrl(
+      "#3370ff",
+      `<path d="M7.2 8.2h7.6M7.2 11.6h9.6M7.2 15h6.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>`
+    ),
+    sheet: makeLarkTypeIconDataUrl(
+      "#34c759",
+      `<rect x="6.6" y="6.4" width="10.8" height="11.2" rx="1.6" stroke="currentColor" stroke-width="1.55"/><path d="M6.6 10.1h10.8M6.6 13.9h10.8M10.2 6.4v11.2M13.8 6.4v11.2" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/>`
+    ),
+    slide: makeLarkTypeIconDataUrl(
+      "#ff9f0a",
+      `<path d="M12 6.6v5.4h5.4A5.4 5.4 0 1 1 12 6.6Z" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/><path d="M14.1 5.8a5.3 5.3 0 0 1 4.1 4.1h-4.1V5.8Z" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/>`
+    ),
+    form: makeLarkTypeIconDataUrl(
+      "#ff9f0a",
+      `<path d="M8.3 6.7h7.4a1.8 1.8 0 0 1 1.8 1.8v7a1.8 1.8 0 0 1-1.8 1.8H8.3a1.8 1.8 0 0 1-1.8-1.8v-7a1.8 1.8 0 0 1 1.8-1.8Z" stroke="currentColor" stroke-width="1.55"/><path d="m9 12.1 1.8 1.8 4.4-4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`
+    ),
+    bitable: makeLarkTypeIconDataUrl(
+      "#00b8a9",
+      `<rect x="6.4" y="6.4" width="4.8" height="4.8" rx="1.15" fill="currentColor"/><rect x="12.8" y="6.4" width="4.8" height="4.8" rx="1.15" fill="currentColor"/><rect x="6.4" y="12.8" width="4.8" height="4.8" rx="1.15" fill="currentColor"/><rect x="12.8" y="12.8" width="4.8" height="4.8" rx="1.15" fill="currentColor"/>`
+    )
+  };
+
+  function makeLarkTypeIconDataUrl(color, glyph) {
+    const svg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" color="${color}" xmlns="http://www.w3.org/2000/svg"><rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${color}" fill-opacity=".08" stroke="${color}" stroke-opacity=".42"/>${glyph}</svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  }
 
   const RAW_CSS = String.raw`
     .lark-doc-theme {
@@ -777,7 +805,7 @@
       display: block !important;
       width: 100% !important;
       min-width: 0 !important;
-      padding-left: 39px !important;
+      padding-left: 35px !important;
       box-sizing: border-box !important;
     }
     .lark-doc-home .topic-list-item .main-link .badge-category__wrapper{
@@ -787,18 +815,28 @@
     .lark-doc-home .topic-list-item .main-link::before {
       content: "";
       position: absolute;
-      left: 12px;
+      left: 13px;
       top: 50%;
-      width: 25px;
-      height: 30px;
-      border-radius: 5px;
-      background:
-        linear-gradient(#ffffff, #ffffff) 7px 9px / 11px 2px no-repeat,
-        linear-gradient(#ffffff, #ffffff) 7px 14px / 11px 2px no-repeat,
-        linear-gradient(#ffffff, #ffffff) 7px 19px / 8px 2px no-repeat,
-        #3370ff;
-      box-shadow: inset 0 0 0 1px rgb(0 0 0 / 4%);
+      width: 22px;
+      height: 22px;
+      background: ${HOME_FILE_ICON_URLS.doc} center / 22px 22px no-repeat;
       transform: translateY(-50%);
+    }
+
+    .lark-doc-home .topic-list-item[data-lark-file-kind="sheet"] .main-link::before {
+      background-image: ${HOME_FILE_ICON_URLS.sheet};
+    }
+
+    .lark-doc-home .topic-list-item[data-lark-file-kind="slide"] .main-link::before {
+      background-image: ${HOME_FILE_ICON_URLS.slide};
+    }
+
+    .lark-doc-home .topic-list-item[data-lark-file-kind="form"] .main-link::before {
+      background-image: ${HOME_FILE_ICON_URLS.form};
+    }
+
+    .lark-doc-home .topic-list-item[data-lark-file-kind="bitable"] .main-link::before {
+      background-image: ${HOME_FILE_ICON_URLS.bitable};
     }
 
     .lark-doc-home .topic-list-item :is(.title, .title a, .link-top-line a.title) {
@@ -2440,6 +2478,32 @@
     }
   }
 
+  function hashString(value) {
+    let hash = 0;
+    for (let index = 0; index < value.length; index += 1) {
+      hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+    }
+    return hash;
+  }
+
+  function makeHomeFileIcons() {
+    for (const [index, row] of document.querySelectorAll(".topic-list-item").entries()) {
+      const titleLink = row.querySelector(
+        ".main-link a.title, .main-link .title a, .main-link a"
+      );
+      const seed =
+        row.dataset.topicId ||
+        row.getAttribute("data-topic-id") ||
+        titleLink?.getAttribute("href") ||
+        titleLink?.textContent?.trim() ||
+        String(index);
+      const kind = HOME_FILE_KINDS[hashString(seed) % HOME_FILE_KINDS.length];
+      if (row.dataset.larkFileKind !== kind) {
+        row.dataset.larkFileKind = kind;
+      }
+    }
+  }
+
   function makeOwnerNames() {
     for (const cell of document.querySelectorAll(".topic-list-item .posters")) {
       const ownerName = cell
@@ -2461,7 +2525,6 @@
       if (label.textContent !== ownerName) label.textContent = ownerName;
     }
   }
-
 
   function applyTheme() {
     injectStyle();
@@ -2504,6 +2567,7 @@
       makeCreateTopicButton();
       makeColumnLabels();
       makeOwnerNames();
+      makeHomeFileIcons();
     }
   }
 
