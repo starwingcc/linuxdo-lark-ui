@@ -651,7 +651,7 @@
       list-style: none !important;
     }
 
-    .lark-doc-home .navigation-container > .lark-create-topic-slot {
+    .lark-doc-home .navigation-container > .navigation-controls {
       display: flex !important;
       flex: 0 0 auto !important;
       align-items: center !important;
@@ -660,6 +660,16 @@
       margin: 0 0 0 auto !important;
       padding: 0 !important;
       list-style: none !important;
+    }
+
+    .lark-doc-home .navigation-container > .navigation-controls
+      > :not(.lark-create-topic):not(:has(.lark-create-topic)) {
+      display: none !important;
+    }
+
+    .lark-doc-home .navigation-container .navigation-controls
+      :is(.topic-drafts-menu-trigger, .d-combo-button-menu) {
+      display: none !important;
     }
 
     .lark-doc-home .navigation-container .lark-create-topic {
@@ -1857,25 +1867,11 @@
     }
     if (!button) return;
 
+    // Keep this Glimmer-owned node in its original parent. Reparenting it breaks
+    // subsequent category route renders; CSS positions the native control instead.
     button.classList.add("lark-create-topic");
     button.setAttribute("aria-label", "新建话题");
     button.title = "新建话题";
-
-    const navigationContainer = document.querySelector(".navigation-container");
-    if (!navigationContainer) return;
-    let slot = navigationContainer.querySelector(":scope > .lark-create-topic-slot");
-    if (!slot) {
-      slot = document.createElement("div");
-      slot.className = "lark-create-topic-slot";
-      navigationContainer.appendChild(slot);
-    }
-    if (button.parentElement !== slot) slot.appendChild(button);
-
-    for (const legacySlot of navigationContainer.querySelectorAll(
-      ".nav-pills > .lark-create-topic-slot"
-    )) {
-      legacySlot.remove();
-    }
 
   }
 
