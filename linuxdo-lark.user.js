@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      2.8.9
+// @version      2.8.12
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -307,7 +307,12 @@
       top: 9px;
       z-index: 2;
       min-width: 0;
-      pointer-events: none;
+      cursor: pointer;
+      pointer-events: auto;
+    }
+
+    .lark-doc-theme .lark-topic-context:hover .lark-topic-crumbs {
+      color: var(--lark-blue-strong);
     }
 
     .lark-doc-theme .lark-topic-crumbs {
@@ -1870,6 +1875,45 @@
 
   }
 
+  function getTopicTopPath() {
+    const parts = location.pathname.split("/").filter(Boolean);
+    if (parts[0] !== "t") return location.pathname;
+    const last = parts[parts.length - 1];
+    const previous = parts[parts.length - 2];
+    if (/^\d+$/.test(last || "") && /^\d+$/.test(previous || "")) {
+      parts.pop();
+    }
+    return `/${parts.join("/")}`;
+  }
+
+  function normalizePath(path) {
+    return path.replace(/\/+$/, "") || "/";
+  }
+
+  function clickTopicTopLink() {
+    const topicTopPath = normalizePath(getTopicTopPath());
+    const nativeLink = [...document.querySelectorAll(".d-header .extra-info-wrapper a[href*='/t/']")]
+      .find((link) => {
+        try {
+          return normalizePath(new URL(link.href, location.href).pathname) === topicTopPath;
+        } catch {
+          return false;
+        }
+      });
+
+    if (nativeLink) {
+      nativeLink.click();
+      return;
+    }
+
+    const fallback = document.createElement("a");
+    fallback.href = topicTopPath;
+    fallback.style.display = "none";
+    document.body.appendChild(fallback);
+    fallback.click();
+    fallback.remove();
+  }
+
   function makeTopicContext() {
     const headerContents = document.querySelector(".d-header .contents");
     if (!headerContents) return;
@@ -1887,6 +1931,20 @@
       context = document.createElement("div");
       context.className = "lark-topic-context";
       headerContents.appendChild(context);
+    }
+
+    context.setAttribute("role", "button");
+    context.setAttribute("aria-label", "回到帖子顶部");
+    context.tabIndex = 0;
+    context.title = "回到帖子顶部";
+    if (context.dataset.scrollTopBound !== "true") {
+      context.addEventListener("click", clickTopicTopLink);
+      context.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        clickTopicTopLink();
+      });
+      context.dataset.scrollTopBound = "true";
     }
 
     const routeKey = `${location.pathname}|${title}`;
