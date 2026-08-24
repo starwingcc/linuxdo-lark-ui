@@ -7,6 +7,16 @@
 
 <img width="1901" height="863" alt="image" src="https://github.com/user-attachments/assets/6407a772-3f9a-4b34-9372-34b28bee33b9" />
 
+## V2版本重大更新
+1. 话题页重构，隐藏用户头像，部分元信息伪装为引用块，话题所有者为黄色样式，引用块内元素可点击
+2. 隐藏帖子相关操作，hover帖子可展示
+3. 隐藏时间线，hover右下角按钮可展示
+4. 新增新老版本切换功能，通过左下角按钮切换
+5. 新增回退到上一页功能，通过右下角按钮回退
+
+### 图片说明
+<img width="1918" height="864" alt="image" src="https://github.com/user-attachments/assets/c162e6ef-aa55-4662-b825-67c6cd683541" />
+
 
 ## 安装
 
