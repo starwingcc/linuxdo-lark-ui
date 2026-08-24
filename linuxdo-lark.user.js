@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      2.8.5
+// @version      2.8.6
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -20,6 +20,7 @@
   const DARK_CLASS = "lark-dark";
   const POST_ROWS_THEME_CLASS = "lark-post-rows-themed";
   const POST_ROWS_MODE_KEY = "linuxdo-lark-post-rows-mode";
+  const HOME_FILE_KINDS = ["doc", "sheet", "slide", "sheet", "form", "bitable"];
   let faviconObserver;
   let postRowsModeFallback = "document";
   let topicToolsCloseTimer;
@@ -31,6 +32,37 @@
     <path d="M23.732 9.295a7.55 7.55 0 0 0-3.35-.776 7.521 7.521 0 0 0-2.284.35c-.054.016-.107.035-.158.05a8.297 8.297 0 0 0-.855.35 7.14 7.14 0 0 0-.552.297 6.716 6.716 0 0 0-.533.347c-.123.089-.243.18-.363.275-.13.104-.252.211-.375.321-.067.06-.13.123-.196.184l-.334.328-1.338 1.321-.23.228-.076.075c-.038.038-.076.073-.11.11l-.057.054a1.914 1.914 0 0 1-.085.08c-.032.028-.063.06-.095.088a13.286 13.286 0 0 1-2.748 1.946c.06.028.12.057.18.082l.142.066c.044.022.091.041.139.063l.135.06.149.067.17.075.164.07c.073.031.142.06.215.088.056.025.116.047.173.07.088.034.177.072.268.107.085.031.168.066.253.098l.189.072c.11.041.218.082.328.12.057.019.11.041.167.06.08.028.155.053.234.082l.192.066.284.095.3.095c.123.037.243.075.366.11l.246.072c.164.048.331.095.495.14.06.015.12.03.18.043.114.029.227.05.34.07.13.022.26.04.389.057a5.815 5.815 0 0 0 .994.019 5.172 5.172 0 0 0 1.413-.3 5.405 5.405 0 0 0 .726-.334c.06-.035.122-.07.182-.108a7.96 7.96 0 0 0 .432-.297 5.362 5.362 0 0 0 .577-.517 5.285 5.285 0 0 0 .37-.429 5.797 5.797 0 0 0 .527-.827l.13-.258 1.166-2.325-.003.006a7.391 7.391 0 0 1 1.527-2.186Z" fill="#133C9A"></path>
   </svg>`;
   const LARK_LOGO_DATA_URL = `data:image/svg+xml,${encodeURIComponent(LARK_LOGO_SVG)}`;
+  const LARK_FILE_ICON_BODY =
+    "M11.849 1.5c.978 0 1.468 0 1.928.11.408.098.799.26 1.157.48.403.247.75.593 1.441 1.285l3.75 3.751c.692.691 1.038 1.037 1.285 1.44.22.358.382.749.48 1.157.11.46.11.95.11 1.928v1.25c0 3.36 0 5.04-.654 6.323a6 6 0 0 1-2.622 2.622c-1.284.654-2.964.654-6.324.654h-.8c-3.36 0-5.04 0-6.324-.654a6 6 0 0 1-2.622-2.622C2 17.94 2 16.26 2 12.9v-1.8c0-3.36 0-5.04.654-6.324a6 6 0 0 1 2.622-2.622C6.56 1.5 8.24 1.5 11.6 1.5h.249Z";
+  const LARK_FILE_ICON_OUTLINE =
+    "M12.349 1c.954 0 1.513-.003 2.045.124.459.11.898.292 1.3.54.466.285.86.682 1.534 1.357l3.252 3.25c.674.675 1.071 1.069 1.357 1.535.247.402.429.841.539 1.3.127.532.124 1.09.124 2.045v1.75c0 1.671 0 2.955-.083 3.98-.084 1.032-.256 1.846-.625 2.57a6.502 6.502 0 0 1-2.84 2.841c-.725.369-1.539.54-2.57.625-1.026.084-2.31.083-3.982.083h-.8c-1.672 0-2.956 0-3.982-.083-1.031-.084-1.845-.256-2.57-.625a6.501 6.501 0 0 1-2.84-2.84c-.369-.725-.54-1.539-.625-2.57-.084-1.026-.083-2.31-.083-3.982v-1.8c0-1.672 0-2.956.083-3.982.084-1.031.256-1.845.625-2.57a6.5 6.5 0 0 1 2.84-2.84c.725-.369 1.539-.54 2.57-.625C8.644.999 9.928 1 11.6 1h.749Zm-.75 1C9.913 2 8.677 2 7.7 2.08c-.97.08-1.638.235-2.197.52A5.5 5.5 0 0 0 3.1 5.003c-.285.56-.44 1.228-.52 2.197-.08.976-.08 2.212-.08 3.9v1.8c0 1.688 0 2.925.08 3.9.08.97.235 1.638.52 2.197A5.5 5.5 0 0 0 5.503 21.4c.56.286 1.228.44 2.197.52.976.08 2.212.08 3.9.08h.8c1.688 0 2.925 0 3.9-.08.97-.08 1.638-.235 2.197-.52a5.5 5.5 0 0 0 2.403-2.403c.286-.56.44-1.228.52-2.197.08-.976.08-2.212.08-3.9v-1.749c0-1.002-.003-1.422-.097-1.811a3.5 3.5 0 0 0-.129-.411 1.253 1.253 0 0 0-.311-.107c-.24-.051-.551-.072-.963-.072v-.005a26.18 26.18 0 0 1-.521.005c-.685 0-1.212 0-1.634-.028-.425-.029-.764-.086-1.07-.211a3.251 3.251 0 0 1-1.785-1.784c-.125-.308-.183-.646-.212-1.07-.028-.423-.028-.95-.028-1.635 0-.197.001-.37.004-.522h-.004c0-.412-.02-.724-.072-.963a1.246 1.246 0 0 0-.108-.312 3.502 3.502 0 0 0-.41-.128C13.77 2.003 13.35 2 12.35 2h-.75Z";
+  const HOME_FILE_ICON_URLS = {
+    doc: makeLarkFileIconDataUrl(
+      "#C0D2FC",
+      `<path d="M16.82 14a.801.801 0 1 1 0 1.6H7.424a.8.8 0 1 1 0-1.6h9.396Zm-5-5a.8.8 0 1 1 0 1.6H7.421a.8.8 0 1 1 0-1.6h4.397Z" fill="#336DF4"></path>`
+    ),
+    sheet: makeLarkFileIconDataUrl(
+      "#9EE8A2",
+      `<path d="M16.976 11.767c.01.226.017.458.02.696v.513a21.3 21.3 0 0 1-.11 1.897c-.154 1.483-1.284 2.624-2.753 2.778-.634.067-1.36.116-2.133.116-.254 0-.502-.007-.744-.016v-5.984h5.72Z" fill="#5CD168"></path><path d="M10.057 11.786v5.823l-.19-.012a3.06 3.06 0 0 1-2.713-2.482l-.04-.271a19.627 19.627 0 0 1-.092-3.058h3.035ZM12 7.711c.774 0 1.5.048 2.133.114 1.47.154 2.687 2.12 2.753 2.753v.008h-5.63v-2.86c.242-.008.49-.015.744-.015Zm-1.943 2.875H7.113l.001-.008a3.06 3.06 0 0 1 2.482-2.713l.271-.04.19-.018v2.78Z" fill="#32A645"></path>`
+    ),
+    slide: makeLarkFileIconDataUrl(
+      "#FED8A1",
+      `<path d="M7 10.2c0-.773.627-1.4 1.4-1.4h7.2c.773 0 1.4.627 1.4 1.4v4.15c0 .773-.627 1.4-1.4 1.4H8.4c-.773 0-1.4-.627-1.4-1.4V10.2Z" fill="#FFB445"></path><path d="M8.65 11.1h6.7a.65.65 0 1 1 0 1.3h-6.7a.65.65 0 1 1 0-1.3Zm0 2.25h4.35a.65.65 0 1 1 0 1.3H8.65a.65.65 0 1 1 0-1.3Z" fill="#D97B00"></path><path d="M9.2 17.3h5.6a.7.7 0 1 1 0 1.4H9.2a.7.7 0 1 1 0-1.4Z" fill="#FFB445"></path>`
+    ),
+    form: makeLarkFileIconDataUrl(
+      "#FED8A1",
+      `<path d="M8.45 8.25h7.1c.69 0 1.25.56 1.25 1.25v6.5c0 .69-.56 1.25-1.25 1.25h-7.1c-.69 0-1.25-.56-1.25-1.25V9.5c0-.69.56-1.25 1.25-1.25Z" fill="#FFB445"></path><path d="m9.05 12.85 1.7 1.7 4.25-4.25" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>`
+    ),
+    bitable: makeLarkFileIconDataUrl(
+      "#9EE4DD",
+      `<rect x="7" y="8.1" width="4.2" height="4.2" rx="1.15" fill="#18BCA9"></rect><rect x="12.8" y="8.1" width="4.2" height="4.2" rx="1.15" fill="#18BCA9"></rect><rect x="7" y="13.9" width="4.2" height="4.2" rx="1.15" fill="#18BCA9"></rect><rect x="12.8" y="13.9" width="4.2" height="4.2" rx="1.15" fill="#18BCA9"></rect>`
+    )
+  };
+
+  function makeLarkFileIconDataUrl(outlineColor, glyph) {
+    const svg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path opacity="0.99" d="${LARK_FILE_ICON_BODY}" fill="#fff"></path><path d="${LARK_FILE_ICON_OUTLINE}" fill="${outlineColor}"></path>${glyph}</svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  }
 
   const RAW_CSS = String.raw`
     .lark-doc-theme {
@@ -279,7 +311,12 @@
       top: 9px;
       z-index: 2;
       min-width: 0;
-      pointer-events: none;
+      cursor: pointer;
+      pointer-events: auto;
+    }
+
+    .lark-doc-theme .lark-topic-context:hover .lark-topic-crumbs {
+      color: var(--lark-blue-strong);
     }
 
     .lark-doc-theme .lark-topic-crumbs {
@@ -799,16 +836,26 @@
       position: absolute;
       left: 12px;
       top: 50%;
-      width: 25px;
-      height: 30px;
-      border-radius: 5px;
-      background:
-        linear-gradient(#ffffff, #ffffff) 7px 9px / 11px 2px no-repeat,
-        linear-gradient(#ffffff, #ffffff) 7px 14px / 11px 2px no-repeat,
-        linear-gradient(#ffffff, #ffffff) 7px 19px / 8px 2px no-repeat,
-        #3370ff;
-      box-shadow: inset 0 0 0 1px rgb(0 0 0 / 4%);
+      width: 24px;
+      height: 24px;
+      background: ${HOME_FILE_ICON_URLS.doc} center / 24px 24px no-repeat;
       transform: translateY(-50%);
+    }
+
+    .lark-doc-home .topic-list-item[data-lark-file-kind="sheet"] .main-link::before {
+      background-image: ${HOME_FILE_ICON_URLS.sheet};
+    }
+
+    .lark-doc-home .topic-list-item[data-lark-file-kind="slide"] .main-link::before {
+      background-image: ${HOME_FILE_ICON_URLS.slide};
+    }
+
+    .lark-doc-home .topic-list-item[data-lark-file-kind="form"] .main-link::before {
+      background-image: ${HOME_FILE_ICON_URLS.form};
+    }
+
+    .lark-doc-home .topic-list-item[data-lark-file-kind="bitable"] .main-link::before {
+      background-image: ${HOME_FILE_ICON_URLS.bitable};
     }
 
     .lark-doc-home .topic-list-item :is(.title, .title a, .link-top-line a.title) {
@@ -1828,6 +1875,45 @@
 
   }
 
+  function getTopicTopPath() {
+    const parts = location.pathname.split("/").filter(Boolean);
+    if (parts[0] !== "t") return location.pathname;
+    const last = parts[parts.length - 1];
+    const previous = parts[parts.length - 2];
+    if (/^\d+$/.test(last || "") && /^\d+$/.test(previous || "")) {
+      parts.pop();
+    }
+    return `/${parts.join("/")}`;
+  }
+
+  function normalizePath(path) {
+    return path.replace(/\/+$/, "") || "/";
+  }
+
+  function clickTopicTopLink() {
+    const topicTopPath = normalizePath(getTopicTopPath());
+    const nativeLink = [...document.querySelectorAll(".d-header .extra-info-wrapper a[href*='/t/']")]
+      .find((link) => {
+        try {
+          return normalizePath(new URL(link.href, location.href).pathname) === topicTopPath;
+        } catch {
+          return false;
+        }
+      });
+
+    if (nativeLink) {
+      nativeLink.click();
+      return;
+    }
+
+    const fallback = document.createElement("a");
+    fallback.href = topicTopPath;
+    fallback.style.display = "none";
+    document.body.appendChild(fallback);
+    fallback.click();
+    fallback.remove();
+  }
+
   function makeTopicContext() {
     const headerContents = document.querySelector(".d-header .contents");
     if (!headerContents) return;
@@ -1845,6 +1931,20 @@
       context = document.createElement("div");
       context.className = "lark-topic-context";
       headerContents.appendChild(context);
+    }
+
+    context.setAttribute("role", "button");
+    context.setAttribute("aria-label", "回到帖子顶部");
+    context.tabIndex = 0;
+    context.title = "回到帖子顶部";
+    if (context.dataset.scrollTopBound !== "true") {
+      context.addEventListener("click", clickTopicTopLink);
+      context.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        clickTopicTopLink();
+      });
+      context.dataset.scrollTopBound = "true";
     }
 
     const routeKey = `${location.pathname}|${title}`;
@@ -2436,6 +2536,32 @@
     }
   }
 
+  function hashString(value) {
+    let hash = 0;
+    for (let index = 0; index < value.length; index += 1) {
+      hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+    }
+    return hash;
+  }
+
+  function makeHomeFileIcons() {
+    for (const [index, row] of document.querySelectorAll(".topic-list-item").entries()) {
+      const titleLink = row.querySelector(
+        ".main-link a.title, .main-link .title a, .main-link a"
+      );
+      const seed =
+        row.dataset.topicId ||
+        row.getAttribute("data-topic-id") ||
+        titleLink?.getAttribute("href") ||
+        titleLink?.textContent?.trim() ||
+        String(index);
+      const kind = HOME_FILE_KINDS[hashString(seed) % HOME_FILE_KINDS.length];
+      if (row.dataset.larkFileKind !== kind) {
+        row.dataset.larkFileKind = kind;
+      }
+    }
+  }
+
   function makeOwnerNames() {
     for (const cell of document.querySelectorAll(".topic-list-item .posters")) {
       const ownerName = cell
@@ -2457,7 +2583,6 @@
       if (label.textContent !== ownerName) label.textContent = ownerName;
     }
   }
-
 
   function applyTheme() {
     injectStyle();
@@ -2500,6 +2625,7 @@
       makeCreateTopicButton();
       makeColumnLabels();
       makeOwnerNames();
+      makeHomeFileIcons();
     }
   }
 
