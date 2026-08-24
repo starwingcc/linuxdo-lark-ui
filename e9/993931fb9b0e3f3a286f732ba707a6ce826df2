@@ -1,0 +1,20 @@
+linuxdo-lark.user.js
+  s_c6c091e986683f::t_5325f17c267bdb 2055-2085,2158,2169
+  s_c6c091e986683f::t_84f0283c6c1e56 4,2096-2100,2102,2119-2126,2128-2130,2146,2159-2168,2226-2229,2279-2283
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.43-trip",
+  "base_commit_sha": "e9993931fb9b0e3f3a286f732ba707a6ce826df2",
+  "prompts": {},
+  "sessions": {
+    "s_c6c091e986683f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a032b0-ffcb-7122-a1ae-c8ba9d62b245",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "starwingcc <707491663@qq.com>"
+    }
+  }
+}
