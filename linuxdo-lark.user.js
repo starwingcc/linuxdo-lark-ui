@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      2.8.7
+// @version      2.8.8
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -841,11 +841,26 @@
     }
 
     .lark-doc-home .topic-list-item .posters .lark-owner-name {
-      display: block;
+      display: flex;
+      align-items: center;
+      gap: 6px;
       overflow: hidden;
       color: var(--lark-text-2) !important;
       font-size: 13px !important;
       font-weight: 400 !important;
+      text-decoration: none !important;
+    }
+
+    .lark-doc-home .topic-list-item .posters .lark-owner-avatar {
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .lark-doc-home .topic-list-item .posters .lark-owner-name-text {
+      overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -2516,10 +2531,15 @@
 
   function makeOwnerNames() {
     for (const cell of document.querySelectorAll(".topic-list-item .posters")) {
-      const ownerName = cell
-        .querySelector("[data-user-card]")
-        ?.getAttribute("data-user-card")
-        ?.trim();
+      const ownerLink = cell.querySelector("[data-user-card]");
+      const ownerAvatar = ownerLink?.querySelector("img.avatar");
+      const titleAttr = ownerAvatar?.getAttribute("title") || "";
+      let ownerName = "";
+      if (titleAttr) {
+        const idx = titleAttr.lastIndexOf(" - ");
+        ownerName = idx > -1 ? titleAttr.slice(0, idx).trim() : titleAttr.trim();
+      }
+      if (!ownerName) ownerName = ownerLink?.getAttribute("data-user-card")?.trim() || "";
       let label = cell.querySelector(":scope > .lark-owner-name");
 
       if (!ownerName) {
@@ -2527,12 +2547,36 @@
         continue;
       }
 
-      if (!label) {
-        label = document.createElement("span");
+      const avatarSrc = ownerAvatar?.currentSrc || ownerAvatar?.src || "";
+      const ownerHref = ownerLink?.getAttribute("href") || "";
+      const userCard = ownerLink?.getAttribute("data-user-card") || "";
+      const renderKey = `${ownerName}|${avatarSrc}|${ownerHref}`;
+
+      if (!label || label.tagName !== "A") {
+        label?.remove();
+        label = document.createElement("a");
         label.className = "lark-owner-name";
         cell.appendChild(label);
       }
-      if (label.textContent !== ownerName) label.textContent = ownerName;
+
+      if (label.dataset.renderKey === renderKey) continue;
+      label.dataset.renderKey = renderKey;
+      label.textContent = "";
+      if (ownerHref) label.href = ownerHref;
+      if (userCard) label.setAttribute("data-user-card", userCard);
+
+      if (avatarSrc) {
+        const img = document.createElement("img");
+        img.className = "lark-owner-avatar";
+        img.src = avatarSrc;
+        img.loading = "lazy";
+        label.appendChild(img);
+      }
+
+      const name = document.createElement("span");
+      name.className = "lark-owner-name-text";
+      name.textContent = ownerName;
+      label.appendChild(name);
     }
   }
 
