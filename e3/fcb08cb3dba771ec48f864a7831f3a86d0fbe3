@@ -1,0 +1,29 @@
+linuxdo-lark.user.js
+  h_8fcb729709821d 4,66,808-809
+  s_f40953fa232dc1::t_23b44c03fe61fc 284-288
+  s_f40953fa232dc1::t_665938210861ec 1847,1850-1866,1868,1872
+  s_f40953fa232dc1::t_bdf0de7ad92c56 1848-1849,1867,1869-1871,1873-1874
+  s_f40953fa232dc1::t_8ba6d644e1a2f3 34-35
+  s_f40953fa232dc1::t_30658de1d30e12 810
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.43-trip",
+  "base_commit_sha": "e3fcb08cb3dba771ec48f864a7831f3a86d0fbe3",
+  "prompts": {},
+  "humans": {
+    "h_8fcb729709821d": {
+      "author": "starwingcc <707491663@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_f40953fa232dc1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d56e6116-a5c5-4afd-997b-f78ce3e5db88",
+        "model": "default"
+      },
+      "human_author": "starwingcc <707491663@qq.com>"
+    }
+  }
+}
