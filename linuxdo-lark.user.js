@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      2.8.6
+// @version      2.8.7
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -31,6 +31,8 @@
     <path d="M23.732 9.295a7.55 7.55 0 0 0-3.35-.776 7.521 7.521 0 0 0-2.284.35c-.054.016-.107.035-.158.05a8.297 8.297 0 0 0-.855.35 7.14 7.14 0 0 0-.552.297 6.716 6.716 0 0 0-.533.347c-.123.089-.243.18-.363.275-.13.104-.252.211-.375.321-.067.06-.13.123-.196.184l-.334.328-1.338 1.321-.23.228-.076.075c-.038.038-.076.073-.11.11l-.057.054a1.914 1.914 0 0 1-.085.08c-.032.028-.063.06-.095.088a13.286 13.286 0 0 1-2.748 1.946c.06.028.12.057.18.082l.142.066c.044.022.091.041.139.063l.135.06.149.067.17.075.164.07c.073.031.142.06.215.088.056.025.116.047.173.07.088.034.177.072.268.107.085.031.168.066.253.098l.189.072c.11.041.218.082.328.12.057.019.11.041.167.06.08.028.155.053.234.082l.192.066.284.095.3.095c.123.037.243.075.366.11l.246.072c.164.048.331.095.495.14.06.015.12.03.18.043.114.029.227.05.34.07.13.022.26.04.389.057a5.815 5.815 0 0 0 .994.019 5.172 5.172 0 0 0 1.413-.3 5.405 5.405 0 0 0 .726-.334c.06-.035.122-.07.182-.108a7.96 7.96 0 0 0 .432-.297 5.362 5.362 0 0 0 .577-.517 5.285 5.285 0 0 0 .37-.429 5.797 5.797 0 0 0 .527-.827l.13-.258 1.166-2.325-.003.006a7.391 7.391 0 0 1 1.527-2.186Z" fill="#133C9A"></path>
   </svg>`;
   const LARK_LOGO_DATA_URL = `data:image/svg+xml,${encodeURIComponent(LARK_LOGO_SVG)}`;
+  const FILE_DOC_SVG = `<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" data-icon="FileDocColorful" aria-hidden="true"><path d="M2.5 2.5a1 1 0 0 1 1-1h12.865a5.24 5.24 0 0 1 3.631 1.447A4.848 4.848 0 0 1 21.5 6.441V21.5a1 1 0 0 1-1 1H7.635a5.24 5.24 0 0 1-3.63-1.447A4.849 4.849 0 0 1 2.5 17.559V2.5Z" fill="#336DF4"></path><path d="M7 8.7a.7.7 0 0 1 .7-.7h8.6a.7.7 0 1 1 0 1.4H7.7a.7.7 0 0 1-.7-.7Zm0 3.4a.7.7 0 0 1 .7-.7h8.6a.7.7 0 1 1 0 1.4H7.7a.7.7 0 0 1-.7-.7Zm0 3.4a.7.7 0 0 1 .7-.7h4.6a.7.7 0 1 1 0 1.4H7.7a.7.7 0 0 1-.7-.7Z" fill="#fff"></path></svg>`;
+  const FILE_DOC_DATA_URL = `data:image/svg+xml,${encodeURIComponent(FILE_DOC_SVG)}`;
 
   const RAW_CSS = String.raw`
     .lark-doc-theme {
@@ -61,7 +63,7 @@
       --lark-shadow-1: rgb(31 35 41 / 4%);
       --lark-shadow-2: rgb(31 35 41 / 8%);
       --lark-shadow-3: rgb(31 35 41 / 12%);
-      --lark-sidebar: 280px;
+      --lark-sidebar: 250px;
       --primary: #1f2329 !important;
       --secondary: #ffffff !important;
       --tertiary: #3370ff !important;
@@ -279,7 +281,11 @@
       top: 9px;
       z-index: 2;
       min-width: 0;
-      pointer-events: none;
+      cursor: pointer;
+    }
+
+    .lark-doc-theme .lark-topic-context:hover .lark-topic-crumbs {
+      color: var(--lark-text);
     }
 
     .lark-doc-theme .lark-topic-crumbs {
@@ -799,15 +805,9 @@
       position: absolute;
       left: 12px;
       top: 50%;
-      width: 25px;
-      height: 30px;
-      border-radius: 5px;
-      background:
-        linear-gradient(#ffffff, #ffffff) 7px 9px / 11px 2px no-repeat,
-        linear-gradient(#ffffff, #ffffff) 7px 14px / 11px 2px no-repeat,
-        linear-gradient(#ffffff, #ffffff) 7px 19px / 8px 2px no-repeat,
-        #3370ff;
-      box-shadow: inset 0 0 0 1px rgb(0 0 0 / 4%);
+      width: 24px;
+      height: 24px;
+      background: url("${FILE_DOC_DATA_URL}") center / contain no-repeat;
       transform: translateY(-50%);
     }
 
@@ -1844,6 +1844,34 @@
     if (!context) {
       context = document.createElement("div");
       context.className = "lark-topic-context";
+      context.title = "回到第一层";
+      context.setAttribute("role", "button");
+      context.tabIndex = 0;
+      const goToFirstPost = () => {
+        const match = location.pathname.match(/^(\/t\/[^/]+\/\d+)/);
+        if (!match) return;
+        const path = `${match[1]}/1${location.search}${location.hash}`;
+        try {
+          const DiscourseURL = window.require?.("discourse/lib/url")?.default;
+          if (DiscourseURL?.routeTo) {
+            DiscourseURL.routeTo(path);
+            return;
+          }
+        } catch { }
+        const link = document.createElement("a");
+        link.href = path;
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      };
+      context.addEventListener("click", goToFirstPost);
+      context.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          goToFirstPost();
+        }
+      });
       headerContents.appendChild(context);
     }
 
