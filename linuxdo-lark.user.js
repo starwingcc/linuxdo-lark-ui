@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      2.8.9
+// @version      2.8.10
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -21,6 +21,8 @@
   const POST_ROWS_THEME_CLASS = "lark-post-rows-themed";
   const POST_ROWS_MODE_KEY = "linuxdo-lark-post-rows-mode";
   let faviconObserver;
+  let tabTitleObserver;
+  let tabTitleTarget = null;
   let postRowsModeFallback = "document";
   let topicToolsCloseTimer;
   let topicToolsOutsideBound = false;
@@ -1761,6 +1763,16 @@
     if (!stripped) return;
     const desired = `飞书云文档 - ${stripped}`;
     if (document.title !== desired) document.title = desired;
+    const titleEl = document.querySelector("title");
+    if (!titleEl || tabTitleTarget === titleEl) return;
+    tabTitleTarget = titleEl;
+    if (!tabTitleObserver) tabTitleObserver = new MutationObserver(makeTabTitle);
+    tabTitleObserver.disconnect();
+    tabTitleObserver.observe(titleEl, {
+      childList: true,
+      characterData: true,
+      subtree: true
+    });
   }
 
   // 对齐 linux.do 自身的颜色模式：深色配色样式表 link 的 media 表达 浅色/深色/自动
