@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      2.8.8
+// @version      2.8.9
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -1756,6 +1756,13 @@
     }
   }
 
+  function makeTabTitle() {
+    const stripped = document.title.replace(/^飞书云文档\s*[-–—]\s*/, "").trim();
+    if (!stripped) return;
+    const desired = `飞书云文档 - ${stripped}`;
+    if (document.title !== desired) document.title = desired;
+  }
+
   // 对齐 linux.do 自身的颜色模式：深色配色样式表 link 的 media 表达 浅色/深色/自动
   function isDarkMode() {
     const darkLink = document.querySelector("link.dark-scheme");
@@ -2597,6 +2604,7 @@
 
     makeBrand();
     makeFavicon();
+    makeTabTitle();
     makeSidebarSearch();
 
     const homeHeading = document.querySelector(".lark-home-heading");
