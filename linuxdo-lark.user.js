@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      2.8.10
+// @version      2.8.11
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -863,6 +863,7 @@
 
     .lark-doc-home .topic-list-item .posters .lark-owner-name-text {
       overflow: hidden;
+      max-width: 120px;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
