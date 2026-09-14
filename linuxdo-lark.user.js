@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Linux DO · 飞书云文档外观
 // @namespace    https://linux.do/
-// @version      2.9.0
+// @version      2.9.1
 // @description  将 Linux DO 的主页与话题页换成飞书云文档风格，浅色 / 深色外观自动跟随站点颜色模式。仅改变外观，保留站点原有内容与交互。
 // @author       Codex
 // @match        https://linux.do/*
@@ -148,7 +148,7 @@
     }
 
     /* 帖子正文链接恢复飞书蓝，避免被上方全局 inherit 染黑 */
-    .lark-doc-theme.${POST_ROWS_THEME_CLASS} .cooked a {
+    .lark-doc-theme .cooked a {
       color: var(--lark-blue) !important;
     }
 
